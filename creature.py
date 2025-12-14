@@ -41,6 +41,8 @@ class Creature:
         self.start_position = None
         self.last_position = None
 
+        self.max_height = 0  # track max height creature climbed
+
     def get_flat_links(self):
         if self.flat_links == None:
             gdicts = genome.Genome.get_genome_dicts(self.dna, self.spec)
@@ -108,3 +110,23 @@ class Creature:
         self.motors = None
         self.start_position = None
         self.last_position = None
+
+        self.max_height = 0  # reset max height for new DNA
+
+    # update max height climbed by creatures to determine fitness score. args: (x, y, z) position
+    def update_max_height(self, pos):
+        if pos is not None and len(pos) >= 3:
+            current_height = pos[2]  # z-coordinate is height
+            if current_height > self.max_height:
+                self.max_height = current_height
+
+    # get max height reached by creature. returns: max z-coordinate during simulation
+    def get_max_height(self):
+        """
+        Get the maximum height achieved by the creature.
+        Used as fitness function for mountain climbing.
+        
+        Returns:
+            float: Maximum z-coordinate reached during simulation
+        """
+        return self.max_height

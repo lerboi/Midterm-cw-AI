@@ -12,8 +12,16 @@ class Simulation:
         p.setPhysicsEngineParameter(enableFileCaching=0, physicsClientId=pid)
 
         p.setGravity(0, 0, -10, physicsClientId=pid)
-        plane_shape = p.createCollisionShape(p.GEOM_PLANE, physicsClientId=pid)
-        floor = p.createMultiBody(plane_shape, plane_shape, physicsClientId=pid)
+        
+        # create mountain environment instead of flat plane
+        arena_size = 20
+        make_arena(arena_size=arena_size, wall_height=1, physicsClientId=pid)
+        
+        p.setAdditionalSearchPath('shapes/', physicsClientId=pid)
+        
+        mountain_position = (0, 0, -1)
+        mountain_orientation = p.getQuaternionFromEuler((0, 0, 0))
+        load_mountain("gaussian_pyramid.urdf", mountain_position, mountain_orientation, physicsClientId=pid)
 
         xml_file = 'temp' + str(self.sim_id) + '.urdf'
         xml_str = cr.to_xml()
@@ -22,7 +30,8 @@ class Simulation:
         
         cid = p.loadURDF(xml_file, physicsClientId=pid)
 
-        p.resetBasePositionAndOrientation(cid, [0, 0, 2.5], [0, 0, 0, 1], physicsClientId=pid)
+        # Start creature at height 10 to drop onto mountain
+        p.resetBasePositionAndOrientation(cid, [0, 0, 10], [0, 0, 0, 1], physicsClientId=pid)
 
 
         for step in range(iterations):
@@ -32,8 +41,7 @@ class Simulation:
 
             pos, orn = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
             cr.update_position(pos)
-            #print(pos[2])
-            #print(cr.get_distance_travelled())
+            cr.update_max_height(pos)  #track maximum height for mountain climbing
         
     
     def update_motors(self, cid, cr):
@@ -99,3 +107,98 @@ class ThreadedSim():
                 # self.creatures array
                 new_creatures.extend(creatures)
         pop.creatures = new_creatures
+
+
+
+# Create arena with walls, returns: floor body ID
+def make_arena(arena_size=10, wall_height=1, physicsClientId=None):
+    wall_thickness = 0.5
+    
+    # Create floor
+    floor_collision_shape = p.createCollisionShape(
+        shapeType=p.GEOM_BOX, 
+        halfExtents=[arena_size/2, arena_size/2, wall_thickness],
+        physicsClientId=physicsClientId
+    )
+    floor_visual_shape = p.createVisualShape(
+        shapeType=p.GEOM_BOX, 
+        halfExtents=[arena_size/2, arena_size/2, wall_thickness], 
+        rgbaColor=[1, 1, 0, 1],
+        physicsClientId=physicsClientId
+    )
+    floor_body = p.createMultiBody(
+        baseMass=0, 
+        baseCollisionShapeIndex=floor_collision_shape, 
+        baseVisualShapeIndex=floor_visual_shape, 
+        basePosition=[0, 0, -wall_thickness],
+        physicsClientId=physicsClientId
+    )
+
+    # create walls 
+    wall_collision_shape = p.createCollisionShape(
+        shapeType=p.GEOM_BOX, 
+        halfExtents=[arena_size/2, wall_thickness/2, wall_height/2],
+        physicsClientId=physicsClientId
+    )
+    wall_visual_shape = p.createVisualShape(
+        shapeType=p.GEOM_BOX, 
+        halfExtents=[arena_size/2, wall_thickness/2, wall_height/2], 
+        rgbaColor=[0.7, 0.7, 0.7, 1],
+        physicsClientId=physicsClientId
+    )
+    
+    p.createMultiBody(
+        baseMass=0, 
+        baseCollisionShapeIndex=wall_collision_shape, 
+        baseVisualShapeIndex=wall_visual_shape, 
+        basePosition=[0, arena_size/2, wall_height/2],
+        physicsClientId=physicsClientId
+    )
+    p.createMultiBody(
+        baseMass=0, 
+        baseCollisionShapeIndex=wall_collision_shape, 
+        baseVisualShapeIndex=wall_visual_shape, 
+        basePosition=[0, -arena_size/2, wall_height/2],
+        physicsClientId=physicsClientId
+    )
+
+    # left and right walls
+    wall_collision_shape = p.createCollisionShape(
+        shapeType=p.GEOM_BOX, 
+        halfExtents=[wall_thickness/2, arena_size/2, wall_height/2],
+        physicsClientId=physicsClientId
+    )
+    wall_visual_shape = p.createVisualShape(
+        shapeType=p.GEOM_BOX, 
+        halfExtents=[wall_thickness/2, arena_size/2, wall_height/2], 
+        rgbaColor=[0.7, 0.7, 0.7, 1],
+        physicsClientId=physicsClientId
+    )
+    
+    p.createMultiBody(
+        baseMass=0, 
+        baseCollisionShapeIndex=wall_collision_shape, 
+        baseVisualShapeIndex=wall_visual_shape, 
+        basePosition=[arena_size/2, 0, wall_height/2],
+        physicsClientId=physicsClientId
+    )
+    p.createMultiBody(
+        baseMass=0, 
+        baseCollisionShapeIndex=wall_collision_shape, 
+        baseVisualShapeIndex=wall_visual_shape, 
+        basePosition=[-arena_size/2, 0, wall_height/2],
+        physicsClientId=physicsClientId
+    )
+    
+    return floor_body
+
+# load mountain URDF, returns: mountain body ID
+def load_mountain(mountain_file, position, orientation, physicsClientId=None):
+        mountain = p.loadURDF(
+            mountain_file, 
+            position, 
+            orientation, 
+            useFixedBase=1,
+            physicsClientId=physicsClientId
+        )
+        return mountain
