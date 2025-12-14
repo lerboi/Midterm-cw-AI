@@ -13,12 +13,14 @@ class Simulation:
 
         p.setGravity(0, 0, -10, physicsClientId=pid)
         
-        # create mountain environment instead of flat plane
+        # Create arena and mountain environment instead of flat plane
         arena_size = 20
         make_arena(arena_size=arena_size, wall_height=1, physicsClientId=pid)
         
+        # Set search path for mountain URDF files
         p.setAdditionalSearchPath('shapes/', physicsClientId=pid)
         
+        # Load mountain
         mountain_position = (0, 0, -1)
         mountain_orientation = p.getQuaternionFromEuler((0, 0, 0))
         load_mountain("gaussian_pyramid.urdf", mountain_position, mountain_orientation, physicsClientId=pid)
@@ -30,18 +32,25 @@ class Simulation:
         
         cid = p.loadURDF(xml_file, physicsClientId=pid)
 
-        # Start creature at height 10 to drop onto mountain
-        p.resetBasePositionAndOrientation(cid, [0, 0, 10], [0, 0, 0, 1], physicsClientId=pid)
+        # Spawn creature at base of mountain (not dropped from height)
+        p.resetBasePositionAndOrientation(cid, [2, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
 
-
-        for step in range(iterations):
+        # Phase 1: Brief settling period (120 steps = 0.5 seconds)
+        for step in range(120):
+            p.stepSimulation(physicsClientId=pid)
+        
+        # Reset max_height after settling to start tracking from settled position
+        cr.max_height = 0
+        
+        # Phase 2: Main simulation with height tracking
+        for step in range(120, iterations):
             p.stepSimulation(physicsClientId=pid)
             if step % 24 == 0:
                 self.update_motors(cid=cid, cr=cr)
 
             pos, orn = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
             cr.update_position(pos)
-            cr.update_max_height(pos)  #track maximum height for mountain climbing
+            cr.update_max_height(pos)  # Track absolute maximum Z-coordinate
         
     
     def update_motors(self, cid, cr):

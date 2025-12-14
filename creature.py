@@ -41,7 +41,7 @@ class Creature:
         self.start_position = None
         self.last_position = None
 
-        self.max_height = 0  # track max height creature climbed
+        self.max_height = 0 # max height 
 
     def get_flat_links(self):
         if self.flat_links == None:
@@ -110,15 +110,14 @@ class Creature:
         self.motors = None
         self.start_position = None
         self.last_position = None
-
-        self.max_height = 0  # reset max height for new DNA
+        self.max_height = 0
 
     # update max height climbed by creatures to determine fitness score. args: (x, y, z) position
     def update_max_height(self, pos):
-        if pos is not None and len(pos) >= 3:
-            current_height = pos[2]  # z-coordinate is height
-            if current_height > self.max_height:
-                self.max_height = current_height
+            if pos is not None and len(pos) >= 3:
+                current_height = pos[2]  # Absolute Z-coordinate
+                if current_height > self.max_height:
+                    self.max_height = current_height
 
     # get max height reached by creature. returns: max z-coordinate during simulation
     def get_max_height(self):

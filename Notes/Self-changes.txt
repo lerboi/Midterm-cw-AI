@@ -42,7 +42,7 @@ p.setGravity(0, 0, -10, physicsClientId=pid)
             cr.update_position(pos)
             cr.update_max_height(pos)  # Track maximum height for mountain climbing
 
-
+================================================================
 
 Experiment Files:
 
@@ -62,6 +62,48 @@ Tests combinations of point, shrink, and grow mutation rates
 Population size fixed at 10, gene count fixed at 3
 
 
+================================================================
+
+realtime_from_csv.py:
+
+Changed to replace flat plane with mountain environment
+
+Before:
+p.connect(p.GUI)
+    p.setPhysicsEngineParameter(enableFileCaching=0)
+    p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
+    plane_shape = p.createCollisionShape(p.GEOM_PLANE)
+    floor = p.createMultiBody(plane_shape, plane_shape)
+    p.setGravity(0, 0, -10)
+
+
+After:
+p.connect(p.GUI)
+    p.setPhysicsEngineParameter(enableFileCaching=0)
+    p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
+    
+    # Create arena and mountain environment
+    p.setGravity(0, 0, -10)
+    arena_size = 20
+    
+    # Import arena and mountain functions from simulation
+    from simulation import make_arena, load_mountain
+    make_arena(arena_size=arena_size, wall_height=1)
+    
+    # Set search path for mountain URDF files
+    p.setAdditionalSearchPath('shapes/')
+    
+    # Load mountain
+    mountain_position = (0, 0, -1)
+    mountain_orientation = p.getQuaternionFromEuler((0, 0, 0))
+    load_mountain("gaussian_pyramid.urdf", mountain_position, mountain_orientation)
+
+
+
+================================================================
+
+
+
 
 
 How it works
@@ -70,6 +112,7 @@ How it works
 cw-envt.py = Visual demo (1 creature, GUI, just to see the environment)
 test_ga_mountain.py = Actual genetic algorithm (10 creatures per generation, no GUI, evolves over 1000 generations)
 realtime_from_csv.py elite_mountain_100.csv = Visualise the creature generated.
+run_all_experiments.py = Run the full experiment and generate the graph
 
 Whats in the csv file?
 Each CSV file stores the creature's DNA as a series of genes. Each gene is a row of numbers between 0 and 1 that encode the creature's body plan.

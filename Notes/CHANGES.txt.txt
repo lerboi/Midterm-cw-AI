@@ -623,3 +623,339 @@ Complete new orchestrator script that:
 ================================================================================
 END OF CHANGE #6
 ================================================================================
+
+
+================================================================================
+CHANGE #7: Fixed Fitness Function to Track Absolute Maximum Height
+Date: 2024-12-14
+Files: creature.py (MODIFIED)
+       simulation.py (MODIFIED)
+       realtime_from_csv.py (MODIFIED)
+Reason: Fix incorrect fitness calculation - should track absolute maximum
+        Z-coordinate (closeness to mountain peak), not relative climb from
+        random landing position
+================================================================================
+
+HIGH-LEVEL SUMMARY:
+- Removed baseline height tracking that was causing incorrect fitness
+- Changed spawning from z=10 (drop) to z=0.5 (base of mountain)
+- Implemented two-phase simulation: settling + tracking
+- Fitness now measures absolute maximum height reached (correct per PDF)
+- All creatures start from same position (fair comparison)
+
+PROBLEM IDENTIFIED:
+Previous implementation tracked height relative to landing position:
+- Creatures dropped from z=10 with random bouncing
+- Baseline set to wherever creature landed (inconsistent)
+- Fitness = relative climb from baseline (wrong metric)
+- Rewarded "landing low + small climb" over "reaching actual peak"
+- Caused creatures to grow larger instead of learning to climb
+
+SOLUTION IMPLEMENTED:
+New implementation tracks absolute maximum Z-coordinate:
+- Creatures spawn at mountain base z=0.5 (consistent start)
+- Brief settling period (0.5 seconds)
+- Track absolute max Z during simulation
+- Fitness = highest Z-coordinate reached (correct per PDF requirement)
+- Directly measures "maximum closeness to top of mountain"
+
+FUNCTION-LEVEL CHANGES:
+
+1. creature.py - Removed baseline tracking
+   - Removed self.baseline_height attribute from __init__
+   - Simplified update_max_height() to track absolute max Z only
+   - Removed baseline from update_dna()
+
+2. simulation.py - Changed spawn position and tracking
+   - Changed spawn from z=10 to z=0.5 (mountain base)
+   - Added two-phase simulation (settling + tracking)
+   - Reset max_height to 0 after settling phase
+   - Track absolute height throughout main simulation
+
+3. realtime_from_csv.py - Same fixes for playback
+   - Changed spawn from z=10 to z=0.5
+   - Removed baseline tracking
+   - Display absolute Z-coordinates
+
+LINE-BY-LINE CODE CHANGES:
+
+LOCATION: creature.py, class Creature, __init__ method
+BEFORE (line ~33):
+        self.motors = None
+        self.start_position = None
+        self.last_position = None
+        self.max_height = 0
+        self.baseline_height = None
+
+AFTER:
+        self.motors = None
+        self.start_position = None
+        self.last_position = None
+        self.max_height = 0
+
+---
+
+LOCATION: creature.py, class Creature, update_max_height method
+BEFORE (entire method):
+    def update_max_height(self, pos):
+        """
+        Update the maximum height achieved by the creature.
+        This is used for mountain climbing fitness.
+        
+        Args:
+            pos: tuple of (x, y, z) coordinates
+        """
+        if pos is not None and len(pos) >= 3:
+            # Set baseline on first call (where creature landed)
+            if self.baseline_height is None:
+                self.baseline_height = pos[2]
+                self.max_height = 0  # Start from 0 relative to landing
+            else:
+                # Track height relative to baseline (landing position)
+                relative_height = pos[2] - self.baseline_height
+                if relative_height > self.max_height:
+                    self.max_height = relative_height
+
+AFTER:
+    def update_max_height(self, pos):
+        """
+        Update the maximum height achieved by the creature.
+        Tracks absolute maximum Z-coordinate for mountain climbing fitness.
+        
+        Args:
+            pos: tuple of (x, y, z) coordinates
+        """
+        if pos is not None and len(pos) >= 3:
+            current_height = pos[2]  # Absolute Z-coordinate
+            if current_height > self.max_height:
+                self.max_height = current_height
+
+---
+
+LOCATION: creature.py, class Creature, update_dna method
+BEFORE (line ~68):
+        self.motors = None
+        self.start_position = None
+        self.last_position = None
+        self.max_height = 0
+        self.baseline_height = None
+
+AFTER:
+        self.motors = None
+        self.start_position = None
+        self.last_position = None
+        self.max_height = 0
+
+---
+
+LOCATION: simulation.py, class Simulation, run_creature method
+BEFORE (entire method - line ~10-43):
+    def run_creature(self, cr, iterations=2400):
+        pid = self.physicsClientId
+        p.resetSimulation(physicsClientId=pid)
+        p.setPhysicsEngineParameter(enableFileCaching=0, physicsClientId=pid)
+
+        p.setGravity(0, 0, -10, physicsClientId=pid)
+        
+        # Create arena and mountain environment instead of flat plane
+        arena_size = 20
+        make_arena(arena_size=arena_size, wall_height=1, physicsClientId=pid)
+        
+        # Set search path for mountain URDF files
+        p.setAdditionalSearchPath('shapes/', physicsClientId=pid)
+        
+        # Load mountain
+        mountain_position = (0, 0, -1)
+        mountain_orientation = p.getQuaternionFromEuler((0, 0, 0))
+        load_mountain("gaussian_pyramid.urdf", mountain_position, mountain_orientation, physicsClientId=pid)
+
+        xml_file = 'temp' + str(self.sim_id) + '.urdf'
+        xml_str = cr.to_xml()
+        with open(xml_file, 'w') as f:
+            f.write(xml_str)
+        
+        cid = p.loadURDF(xml_file, physicsClientId=pid)
+
+        # Start creature at height 10 to drop onto mountain
+        p.resetBasePositionAndOrientation(cid, [0, 0, 10], [0, 0, 0, 1], physicsClientId=pid)
+
+        for step in range(iterations):
+            p.stepSimulation(physicsClientId=pid)
+            if step % 24 == 0:
+                self.update_motors(cid=cid, cr=cr)
+
+            pos, orn = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
+            cr.update_position(pos)
+            
+            # Start tracking height after creature has landed (~1 second)
+            if step >= 240:  # 240 steps = 1 second at 240fps
+                cr.update_max_height(pos)
+
+AFTER:
+    def run_creature(self, cr, iterations=2400):
+        pid = self.physicsClientId
+        p.resetSimulation(physicsClientId=pid)
+        p.setPhysicsEngineParameter(enableFileCaching=0, physicsClientId=pid)
+
+        p.setGravity(0, 0, -10, physicsClientId=pid)
+        
+        # Create arena and mountain environment instead of flat plane
+        arena_size = 20
+        make_arena(arena_size=arena_size, wall_height=1, physicsClientId=pid)
+        
+        # Set search path for mountain URDF files
+        p.setAdditionalSearchPath('shapes/', physicsClientId=pid)
+        
+        # Load mountain
+        mountain_position = (0, 0, -1)
+        mountain_orientation = p.getQuaternionFromEuler((0, 0, 0))
+        load_mountain("gaussian_pyramid.urdf", mountain_position, mountain_orientation, physicsClientId=pid)
+
+        xml_file = 'temp' + str(self.sim_id) + '.urdf'
+        xml_str = cr.to_xml()
+        with open(xml_file, 'w') as f:
+            f.write(xml_str)
+        
+        cid = p.loadURDF(xml_file, physicsClientId=pid)
+
+        # Spawn creature at base of mountain (not dropped from height)
+        # Mountain base is at z=-1, surface at center is ~z=0, spawn slightly above
+        p.resetBasePositionAndOrientation(cid, [0, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
+
+        # Phase 1: Brief settling period (120 steps = 0.5 seconds)
+        for step in range(120):
+            p.stepSimulation(physicsClientId=pid)
+        
+        # Reset max_height after settling to start tracking from settled position
+        cr.max_height = 0
+        
+        # Phase 2: Main simulation with height tracking
+        for step in range(120, iterations):
+            p.stepSimulation(physicsClientId=pid)
+            if step % 24 == 0:
+                self.update_motors(cid=cid, cr=cr)
+
+            pos, orn = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
+            cr.update_position(pos)
+            cr.update_max_height(pos)  # Track absolute maximum Z-coordinate
+
+---
+
+LOCATION: realtime_from_csv.py, main function
+BEFORE (lines ~13-30 and tracking section):
+    pid = p.connect(p.GUI)
+    p.setPhysicsEngineParameter(enableFileCaching=0, physicsClientId=pid)
+    p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0, physicsClientId=pid)
+    
+    # Create arena and mountain environment
+    p.setGravity(0, 0, -10, physicsClientId=pid)
+    arena_size = 20
+    
+    # Import arena and mountain functions from simulation
+    from simulation import make_arena, load_mountain
+    make_arena(arena_size=arena_size, wall_height=1, physicsClientId=pid)
+    
+    # Set search path for mountain URDF files
+    p.setAdditionalSearchPath('shapes/', physicsClientId=pid)
+    
+    # Load mountain
+    mountain_position = (0, 0, -1)
+    mountain_orientation = p.getQuaternionFromEuler((0, 0, 0))
+    load_mountain("gaussian_pyramid.urdf", mountain_position, mountain_orientation, physicsClientId=pid)
+
+    # generate a random creature
+    cr = creature.Creature(gene_count=1)
+    dna = genome.Genome.from_csv(csv_file)
+    cr.update_dna(dna)
+    # save it to XML
+    with open('test.urdf', 'w') as f:
+        f.write(cr.to_xml())
+    # load it into the sim
+    rob1 = p.loadURDF('test.urdf', physicsClientId=pid)
+    # air drop it
+    p.resetBasePositionAndOrientation(rob1, [0, 0, 10], [0, 0, 0, 1], physicsClientId=pid)
+
+AFTER:
+    pid = p.connect(p.GUI)
+    p.setPhysicsEngineParameter(enableFileCaching=0, physicsClientId=pid)
+    p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0, physicsClientId=pid)
+    
+    # Create arena and mountain environment
+    p.setGravity(0, 0, -10, physicsClientId=pid)
+    arena_size = 20
+    
+    # Import arena and mountain functions from simulation
+    from simulation import make_arena, load_mountain
+    make_arena(arena_size=arena_size, wall_height=1, physicsClientId=pid)
+    
+    # Set search path for mountain URDF files
+    p.setAdditionalSearchPath('shapes/', physicsClientId=pid)
+    
+    # Load mountain
+    mountain_position = (0, 0, -1)
+    mountain_orientation = p.getQuaternionFromEuler((0, 0, 0))
+    load_mountain("gaussian_pyramid.urdf", mountain_position, mountain_orientation, physicsClientId=pid)
+
+    # generate a random creature
+    cr = creature.Creature(gene_count=1)
+    dna = genome.Genome.from_csv(csv_file)
+    cr.update_dna(dna)
+    # save it to XML
+    with open('test.urdf', 'w') as f:
+        f.write(cr.to_xml())
+    # load it into the sim
+    rob1 = p.loadURDF('test.urdf', physicsClientId=pid)
+    
+    # Spawn at base of mountain (not dropped from height)
+    p.resetBasePositionAndOrientation(rob1, [0, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
+    
+    # Brief settling period
+    for i in range(120):
+        p.stepSimulation(physicsClientId=pid)
+
+---
+
+LOCATION: realtime_from_csv.py, tracking section in while loop
+BEFORE (tracking logic in main loop):
+    # Track height same way as training
+    if step >= 240:  # After landing
+        if baseline_height is None:
+            baseline_height = new_pos[2]
+            max_height = 0
+        else:
+            relative_height = new_pos[2] - baseline_height
+            if relative_height > max_height:
+                max_height = relative_height
+        
+        print(f"Current height: {new_pos[2]:.3f}, Max climb: {max_height:.3f}")
+
+AFTER:
+    # Track absolute maximum height (same as training)
+    current_z = new_pos[2]
+    if current_z > max_height:
+        max_height = current_z
+    
+    print(f"Current Z: {current_z:.3f}, Max Z reached: {max_height:.3f}")
+
+---
+
+LOCATION: realtime_from_csv.py, variable initialization
+BEFORE (around line ~48):
+    max_height = 0
+    baseline_height = None
+
+AFTER:
+    max_height = 0
+
+---
+
+LOCATION: realtime_from_csv.py, final print statement
+BEFORE:
+    print(f"\nFINAL MAX CLIMB HEIGHT: {max_height:.3f}")
+
+AFTER:
+    print(f"\nFINAL MAX HEIGHT REACHED: {max_height:.3f}")
+
+================================================================================
+END OF CHANGE #7
+================================================================================
