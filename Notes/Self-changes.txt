@@ -41,3 +41,36 @@ p.setGravity(0, 0, -10, physicsClientId=pid)
       pos, orn = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
             cr.update_position(pos)
             cr.update_max_height(pos)  # Track maximum height for mountain climbing
+
+
+
+Experiment Files:
+
+experiment_gene_count.py - 
+Test different gene counts
+Tests: 2, 3, 5, 10
+Population size fixed at 10
+
+experiment_population_size.py - 
+Test different population sizes
+Tests: 5, 10, 20, 50
+Gene count fixed at 3
+
+experiment_mutation_rate.py - 
+Test different mutation rates
+Tests combinations of point, shrink, and grow mutation rates
+Population size fixed at 10, gene count fixed at 3
+
+
+
+
+How it works
+==================
+
+cw-envt.py = Visual demo (1 creature, GUI, just to see the environment)
+test_ga_mountain.py = Actual genetic algorithm (10 creatures per generation, no GUI, evolves over 1000 generations)
+realtime_from_csv.py elite_mountain_100.csv = Visualise the creature generated.
+
+Whats in the csv file?
+Each CSV file stores the creature's DNA as a series of genes. Each gene is a row of numbers between 0 and 1 that encode the creature's body plan.
+

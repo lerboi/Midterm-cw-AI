@@ -41,14 +41,16 @@ class TestGA(unittest.TestCase):
                 cr.update_dna(dna)
                 new_creatures.append(cr)
             
-            # keep the best creature
+            # keep the best creature (save every 10th generation)
             max_fit = np.max(fits)
             for cr in pop.creatures:
                 if cr.get_max_height() == max_fit:
                     new_cr = creature.Creature(1)
                     new_cr.update_dna(cr.dna)
                     new_creatures[0] = new_cr
-                    filename = "elite_mountain_"+str(iteration)+".csv"
+                    import os
+                    os.makedirs("elite_creatures", exist_ok=True)
+                    filename = "elite_creatures/elite_mountain_"+str(iteration)+".csv"
                     genome.Genome.to_csv(cr.dna, filename)
                     break
             

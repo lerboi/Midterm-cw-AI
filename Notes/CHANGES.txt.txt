@@ -290,3 +290,336 @@ AFTER:
 ================================================================================
 END OF CHANGE #3
 ================================================================================
+
+
+================================================================================
+CHANGE #4: Created Parameter Experiment Scripts
+Date: 2024-12-14
+Files: experiment_population_size.py (NEW FILE)
+       experiment_gene_count.py (NEW FILE)
+       experiment_mutation_rates.py (NEW FILE)
+Reason: Basic requirement - Need to test different GA and genome settings
+        and collect data for graphs/tables showing how settings affect climbing
+================================================================================
+
+HIGH-LEVEL SUMMARY:
+- Created three experiment scripts to test different GA parameters
+- Each script runs the GA with different parameter values and saves results
+- Results saved to CSV files in results/ folder for later analysis
+- Data includes: generation number, max fitness, mean fitness, max links, mean links
+- Scripts based on test_ga_mountain.py with data collection added
+
+EXPERIMENT SCRIPTS:
+
+1. experiment_population_size.py
+   - Tests population sizes: 5, 10, 20, 50
+   - Gene count fixed at 3
+   - Runs 500 generations for each population size
+   - Saves results to: results/pop_size_{size}.csv
+
+2. experiment_gene_count.py
+   - Tests gene counts: 2, 3, 5, 10
+   - Population size fixed at 10
+   - Runs 500 generations for each gene count
+   - Saves results to: results/gene_count_{count}.csv
+
+3. experiment_mutation_rates.py
+   - Tests different mutation rate combinations
+   - Population size fixed at 10, gene count fixed at 3
+   - Runs 500 generations for each rate combination
+   - Saves results to: results/mutation_point_{rate}_shrink_{rate}_grow_{rate}.csv
+   - Tests:
+     * Low rates: point=0.05, shrink=0.1, grow=0.05
+     * Medium rates: point=0.1, shrink=0.25, grow=0.1 (baseline)
+     * High rates: point=0.25, shrink=0.5, grow=0.25
+
+FUNCTION-LEVEL CHANGES:
+
+1. Added save_results() helper function
+   - Saves generation data to CSV file
+   - Creates results/ directory if it doesn't exist
+   - Appends data row by row during evolution
+
+2. Modified testBasicGA() in each experiment
+   - Loops through different parameter values
+   - Collects fitness and link statistics each generation
+   - Saves data to CSV files
+   - Prints progress to console
+
+3. Added data collection during GA loop
+   - Records: iteration, max_fit, mean_fit, max_links, mean_links
+   - Saves elite creature DNA to elite_creatures/ folder
+
+LINE-BY-LINE CODE CHANGES:
+
+All three files are new, based on test_ga_mountain.py with these additions:
+
+NEW HELPER FUNCTION (added to all experiment scripts):
+def save_results(filename, generation, max_fit, mean_fit, max_links, mean_links):
+    """Save experiment results to CSV file"""
+    import os
+    os.makedirs("results", exist_ok=True)
+    filepath = os.path.join("results", filename)
+    
+    # Create file with headers if it doesn't exist
+    if not os.path.exists(filepath):
+        with open(filepath, 'w') as f:
+            f.write("generation,max_fitness,mean_fitness,max_links,mean_links\n")
+    
+    # Append data
+    with open(filepath, 'a') as f:
+        f.write(f"{generation},{max_fit},{mean_fit},{max_links},{mean_links}\n")
+
+MODIFIED GA LOOP (example from experiment_population_size.py):
+for pop_size in [5, 10, 20, 50]:
+    print(f"\n{'='*60}")
+    print(f"Testing Population Size: {pop_size}")
+    print(f"{'='*60}\n")
+    
+    pop = population.Population(pop_size=pop_size, gene_count=3)
+    sim = simulation.Simulation()
+    
+    for iteration in range(500):
+        # ... GA loop ...
+        
+        # Save results after each generation
+        save_results(
+            f"pop_size_{pop_size}.csv",
+            iteration,
+            np.max(fits),
+            np.mean(fits),
+            np.max(links),
+            np.mean(links)
+        )
+
+================================================================================
+END OF CHANGE #4
+================================================================================
+
+
+================================================================================
+CHANGE #5: Created Visualization Script for Graphs and Tables
+Date: 2024-12-14
+File: create_graphs.py (NEW FILE)
+Reason: Basic requirement - Need to produce graphs and tables describing how
+        different settings affect mountain climbing performance
+================================================================================
+
+HIGH-LEVEL SUMMARY:
+- Created visualization script to analyze experimental results
+- Generates line graphs showing fitness over generations for each parameter
+- Creates comparison plots showing all configurations on same graph
+- Produces summary tables with key statistics
+- Saves all outputs to graphs/ folder
+
+FEATURES:
+
+1. Line Graphs for Each Experiment
+   - Population size experiments: 4 separate graphs
+   - Gene count experiments: 4 separate graphs
+   - Mutation rate experiments: 3 separate graphs
+   - Shows max fitness and mean fitness over time
+
+2. Comparison Plots
+   - All population sizes on one graph
+   - All gene counts on one graph
+   - All mutation configurations on one graph
+   - Easy visual comparison of different settings
+
+3. Summary Tables
+   - Creates CSV files with statistics for each experiment
+   - Includes: final max fitness, final mean fitness, peak generation
+   - Saved to graphs/summary_*.csv
+
+FUNCTION-LEVEL CHANGES:
+
+1. plot_single_experiment(csv_file, title, output_file)
+   - Reads CSV data from results/ folder
+   - Creates line plot with max and mean fitness
+   - Saves to graphs/ folder
+
+2. plot_comparison(csv_files, labels, title, output_file)
+   - Plots multiple experiments on same graph
+   - Different colors for each configuration
+   - Includes legend for identification
+
+3. create_summary_table(csv_files, labels, output_file)
+   - Analyzes final results from each experiment
+   - Creates summary statistics table
+   - Saves to CSV for inclusion in report
+
+4. main()
+   - Orchestrates all visualization tasks
+   - Calls plotting functions for each experiment type
+   - Creates all graphs and tables
+
+LINE-BY-LINE CODE CHANGES:
+
+LOCATION: create_graphs.py (NEW FILE)
+This is a completely new file.
+
+Key libraries used:
+- matplotlib.pyplot for plotting
+- pandas for data handling
+- numpy for statistics
+
+Output structure:
+- graphs/pop_size_*.png (individual plots)
+- graphs/pop_size_comparison.png (comparison plot)
+- graphs/gene_count_*.png (individual plots)
+- graphs/gene_count_comparison.png (comparison plot)
+- graphs/mutation_*.png (individual plots)
+- graphs/mutation_comparison.png (comparison plot)
+- graphs/summary_population.csv (statistics table)
+- graphs/summary_genes.csv (statistics table)
+- graphs/summary_mutation.csv (statistics table)
+
+================================================================================
+END OF CHANGE #5
+================================================================================
+
+
+================================================================================
+CHANGE #6: Reorganized Experiments and Created Main Orchestrator Script
+Date: 2024-12-14
+Files: experiments/experiment_population_size.py (MOVED & MODIFIED)
+       experiments/experiment_gene_count.py (MOVED & MODIFIED)
+       experiments/experiment_mutation_rates.py (MOVED & MODIFIED)
+       experiments/create_graphs.py (MOVED & MODIFIED)
+       run_all_experiments.py (NEW FILE - ROOT)
+Reason: Organize experiment files and create single script to run all
+        experiments and generate graphs automatically
+================================================================================
+
+HIGH-LEVEL SUMMARY:
+- Created experiments/ folder to organize all experiment and visualization scripts
+- Moved all experiment scripts into experiments/ folder
+- Modified experiment scripts to be both standalone runnable AND importable
+- Modified create_graphs.py to auto-display graphs and be importable
+- Created run_all_experiments.py as main orchestrator in root folder
+- Updated all file paths to work with new folder structure
+
+FOLDER STRUCTURE:
+experiments/
+  ├── experiment_population_size.py
+  ├── experiment_gene_count.py
+  ├── experiment_mutation_rates.py
+  └── create_graphs.py
+
+root/
+  └── run_all_experiments.py (NEW)
+
+results/ (created automatically)
+graphs/ (created automatically)
+elite_creatures/ (created automatically)
+
+MODIFICATIONS TO EXPERIMENT SCRIPTS:
+
+1. Added run_population_experiments() function
+   - Extracted logic from testPopulationSizes()
+   - Can be called from external scripts
+   - Returns nothing, saves results to CSV
+
+2. Modified file paths
+   - Changed "results/" to "../results/" (parent directory)
+   - Changed "elite_creatures/" to "../elite_creatures/"
+
+3. Wrapped unittest.main() in if __name__ == "__main__"
+   - Allows standalone execution
+   - Prevents auto-run when imported
+
+MODIFICATIONS TO CREATE_GRAPHS.PY:
+
+1. Added generate_all_graphs() function
+   - Wrapper for main() function
+   - Can be called from external scripts
+
+2. Added display_comparison_graphs() function
+   - Opens comparison plots with plt.show()
+   - Displays graphs in popup windows
+
+3. Modified file paths
+   - Changed "results/" to "../results/"
+   - Changed "graphs/" to "../graphs/"
+
+4. Modified plotting functions
+   - Auto-display graphs after saving
+   - Use plt.show() for comparison plots
+
+NEW RUN_ALL_EXPERIMENTS.PY:
+
+1. Main orchestrator script
+   - Imports experiment modules
+   - Runs all experiments sequentially
+   - Generates graphs automatically
+   - Displays comparison graphs
+
+2. Features
+   - Simple text progress output
+   - Error handling for each step
+   - Clear completion messages
+
+LINE-BY-LINE CODE CHANGES:
+
+LOCATION: experiments/experiment_population_size.py
+ADDED NEW FUNCTION (before class TestGA):
+
+def run_population_experiments():
+    """Run population size experiments - callable from other scripts"""
+    # ... (extracted from testPopulationSizes)
+
+MODIFIED: File paths
+BEFORE: "results/pop_size_{pop_size}.csv"
+AFTER: "../results/pop_size_{pop_size}.csv"
+
+BEFORE: "elite_creatures/pop_{pop_size}_gen_{iteration}.csv"
+AFTER: "../elite_creatures/pop_{pop_size}_gen_{iteration}.csv"
+
+MODIFIED: unittest.main() call
+BEFORE (at end of file):
+unittest.main()
+
+AFTER:
+if __name__ == "__main__":
+    unittest.main()
+
+---
+
+SIMILAR CHANGES FOR:
+- experiments/experiment_gene_count.py (added run_gene_experiments())
+- experiments/experiment_mutation_rates.py (added run_mutation_experiments())
+
+---
+
+LOCATION: experiments/create_graphs.py
+ADDED NEW FUNCTIONS:
+
+def generate_all_graphs():
+    """Generate all graphs - callable from other scripts"""
+    main()
+
+def display_comparison_graphs():
+    """Display comparison graphs in popup windows"""
+    # Opens the 3 main comparison plots
+
+MODIFIED: All file paths
+BEFORE: "results/"
+AFTER: "../results/"
+
+BEFORE: "graphs/"
+AFTER: "../graphs/"
+
+MODIFIED: plot_comparison() function
+ADDED at end: plt.show() to display graph
+
+---
+
+LOCATION: run_all_experiments.py (NEW FILE IN ROOT)
+Complete new orchestrator script that:
+1. Runs all experiments
+2. Generates graphs
+3. Displays results
+
+================================================================================
+END OF CHANGE #6
+================================================================================

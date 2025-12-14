@@ -95,3 +95,10 @@ rob1 = p.loadURDF('test.urdf', (0, 0, 10))
 
 p.setRealTimeSimulation(1)
 
+# Keep the simulation window open and run physics
+import time
+try:
+    while True:
+        time.sleep(1./240.)  # Run at 240 fps
+except KeyboardInterrupt:
+    p.disconnect()
