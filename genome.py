@@ -86,7 +86,7 @@ class Genome():
             recur = int(gdict["link-recurrence"]) + 1
             link = URDFLink(name=link_name, 
                             parent_name=parent_name, 
-                            recur=recur+1, 
+                            recur=recur, 
                             link_length=gdict["link-length"], 
                             link_radius=gdict["link-radius"], 
                             link_mass=gdict["link-mass"],
@@ -126,7 +126,9 @@ class Genome():
         for gene in new_genome:
             for i in range(len(gene)):
                 if random.random() < rate:
-                    gene[i] += 0.1
+                    # Bidirectional mutation: can increase OR decrease
+                    gene[i] += random.uniform(-0.1, 0.1)
+                # Clamp to valid range [0, 1)
                 if gene[i] >= 1.0:
                     gene[i] = 0.9999
                 if gene[i] < 0.0:
@@ -153,7 +155,6 @@ class Genome():
             return new_genome
         else:
             return copy.copy(genome)
-
 
     @staticmethod
     def to_csv(dna, csv_file):

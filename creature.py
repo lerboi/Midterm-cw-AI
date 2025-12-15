@@ -149,7 +149,7 @@ class Creature:
             float: Distance from current position to (0, 0)
         """
         if self.last_position is None:
-            return 5.3  # Starting distance from spawn point
+            return 7.8  # Starting distance from spawn point at (-7.8, 0)
         x, y = self.last_position[0], self.last_position[1]
         import math
         return math.sqrt(x*x + y*y)
@@ -160,10 +160,10 @@ class Creature:
         Higher score = closer to mountain peak at (0, 0).
         
         Returns:
-            float: Proximity score (0 to 5.3)
+            float: Proximity score (0 to 7.8)
         """
         distance = self.get_distance_to_center()
-        return max(0, 5.3 - distance)
+        return max(0, 7.8 - distance)
     
     def get_hybrid_fitness(self):
         """

@@ -33,15 +33,15 @@ class Simulation:
         cid = p.loadURDF(xml_file, physicsClientId=pid)
 
         # Spawn creature at base of mountain (not dropped from height)
-        p.resetBasePositionAndOrientation(cid, [-7.3, 0, 5], [0, 0, 0, 1], physicsClientId=pid)
+        p.resetBasePositionAndOrientation(cid, [-7.8, 0, 3], [0, 0, 0, 1], physicsClientId=pid)
 
-       # Phase 1: Brief settling period (120 steps = 0.5 seconds)
-        for step in range(120):
+       # Phase 1: Brief settling period (480 steps = 0.5 seconds)
+        for step in range(480):
             p.stepSimulation(physicsClientId=pid)
         
         # Phase 2: Main simulation with height tracking
         # First call to update_max_height will set baseline to settled position
-        for step in range(120, iterations):
+        for step in range(480, iterations):
             p.stepSimulation(physicsClientId=pid)
             if step % 24 == 0:
                 self.update_motors(cid=cid, cr=cr)
