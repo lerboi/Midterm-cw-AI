@@ -14,7 +14,7 @@ class Simulation:
         p.setGravity(0, 0, -10, physicsClientId=pid)
         
         # Create arena and mountain environment instead of flat plane
-        arena_size = 20
+        arena_size = 40
         make_arena(arena_size=arena_size, wall_height=1, physicsClientId=pid)
         
         # Set search path for mountain URDF files
@@ -33,16 +33,14 @@ class Simulation:
         cid = p.loadURDF(xml_file, physicsClientId=pid)
 
         # Spawn creature at base of mountain (not dropped from height)
-        p.resetBasePositionAndOrientation(cid, [2, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
+        p.resetBasePositionAndOrientation(cid, [-7.3, 0, 5], [0, 0, 0, 1], physicsClientId=pid)
 
-        # Phase 1: Brief settling period (120 steps = 0.5 seconds)
+       # Phase 1: Brief settling period (120 steps = 0.5 seconds)
         for step in range(120):
             p.stepSimulation(physicsClientId=pid)
         
-        # Reset max_height after settling to start tracking from settled position
-        cr.max_height = 0
-        
         # Phase 2: Main simulation with height tracking
+        # First call to update_max_height will set baseline to settled position
         for step in range(120, iterations):
             p.stepSimulation(physicsClientId=pid)
             if step % 24 == 0:
@@ -50,7 +48,7 @@ class Simulation:
 
             pos, orn = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
             cr.update_position(pos)
-            cr.update_max_height(pos)  # Track absolute maximum Z-coordinate
+            cr.update_max_height(pos)  # Track height relative to baseline (pure climbing)
         
     
     def update_motors(self, cid, cr):

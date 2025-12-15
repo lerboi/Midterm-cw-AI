@@ -17,7 +17,7 @@ def main(csv_file):
     
     # Create arena and mountain environment
     p.setGravity(0, 0, -10, physicsClientId=pid)
-    arena_size = 20
+    arena_size = 40
     
     # Import arena and mountain functions from simulation
     from simulation import make_arena, load_mountain
@@ -42,7 +42,7 @@ def main(csv_file):
     rob1 = p.loadURDF('test.urdf', physicsClientId=pid)
     
     # Spawn at base of mountain (not dropped from height)
-    p.resetBasePositionAndOrientation(rob1, [0.7, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
+    p.resetBasePositionAndOrientation(rob1, [-7.3, 0, 5], [0, 0, 0, 1], physicsClientId=pid)
     
     # Brief settling period
     for i in range(120):
@@ -56,6 +56,7 @@ def main(csv_file):
     total_time = 30 # seconds
     step = 0
     max_height = 0
+    baseline_height = None
     
     while True:
         p.stepSimulation(physicsClientId=pid)
@@ -73,12 +74,16 @@ def main(csv_file):
                             physicsClientId=pid)
             new_pos, orn = p.getBasePositionAndOrientation(rob1, physicsClientId=pid)
             
-            # Track absolute maximum height (same as training)
-            current_z = new_pos[2]
-            if current_z > max_height:
-                max_height = current_z
+            # Track height relative to baseline (same as training)
+            if baseline_height is None:
+                baseline_height = new_pos[2]
+                max_height = 0
+            else:
+                relative_height = new_pos[2] - baseline_height
+                if relative_height > max_height:
+                    max_height = relative_height
             
-            print(f"Current Z: {current_z:.3f}, Max Z reached: {max_height:.3f}")
+            print(f"Current Z: {new_pos[2]:.3f}, Baseline: {baseline_height:.3f}, Climb: {max_height:.3f}")
         
         time.sleep(wait_time)
         elapsed_time += wait_time

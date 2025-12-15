@@ -42,6 +42,7 @@ class Creature:
         self.last_position = None
 
         self.max_height = 0 # max height 
+        self.baseline_height = None
 
     def get_flat_links(self):
         if self.flat_links == None:
@@ -111,13 +112,22 @@ class Creature:
         self.start_position = None
         self.last_position = None
         self.max_height = 0
+        self.baseline_height = None
 
     # update max height climbed by creatures to determine fitness score. args: (x, y, z) position
     def update_max_height(self, pos):
-            if pos is not None and len(pos) >= 3:
-                current_height = pos[2]  # Absolute Z-coordinate
-                if current_height > self.max_height:
-                    self.max_height = current_height
+        if pos is not None and len(pos) >= 3:
+            current_height = pos[2]
+            
+            # Set baseline on first call (settled position after spawn)
+            if self.baseline_height is None:
+                self.baseline_height = current_height
+                self.max_height = 0  # Start from 0 relative to baseline
+            else:
+                # Track height relative to baseline (actual climbing)
+                relative_height = current_height - self.baseline_height
+                if relative_height > self.max_height:
+                    self.max_height = relative_height
 
     # get max height reached by creature. returns: max z-coordinate during simulation
     def get_max_height(self):
@@ -129,3 +139,45 @@ class Creature:
             float: Maximum z-coordinate reached during simulation
         """
         return self.max_height
+    
+    def get_distance_to_center(self):
+        """
+        Calculate distance from mountain center (0, 0).
+        Used for navigation component of fitness.
+        
+        Returns:
+            float: Distance from current position to (0, 0)
+        """
+        if self.last_position is None:
+            return 5.3  # Starting distance from spawn point
+        x, y = self.last_position[0], self.last_position[1]
+        import math
+        return math.sqrt(x*x + y*y)
+    
+    def get_proximity_score(self):
+        """
+        Calculate proximity score (inverse of distance to center).
+        Higher score = closer to mountain peak at (0, 0).
+        
+        Returns:
+            float: Proximity score (0 to 5.3)
+        """
+        distance = self.get_distance_to_center()
+        return max(0, 5.3 - distance)
+    
+    def get_hybrid_fitness(self):
+        """
+        Calculate hybrid fitness combining climbing + navigation.
+        Fitness = height_climbed + proximity_to_center
+        
+        Returns:
+            float: Combined fitness score
+        """
+        # Component 1: Height climbed (vertical progress)
+        height_component = self.max_height
+        
+        # Component 2: Proximity to center (horizontal progress)
+        proximity_component = self.get_proximity_score()
+        
+        # Combined fitness with equal weight (1.0)
+        return height_component + (proximity_component * 1.0)

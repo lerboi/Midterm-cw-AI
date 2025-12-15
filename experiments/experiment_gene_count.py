@@ -34,7 +34,7 @@ def run_gene_experiments():
             for cr in pop.creatures:
                 sim.run_creature(cr, 2400)            
             
-            fits = [cr.get_max_height() for cr in pop.creatures]
+            fits = [cr.get_hybrid_fitness() for cr in pop.creatures]
             links = [len(cr.get_expanded_links()) for cr in pop.creatures]
             
             max_fit = np.max(fits)
@@ -70,7 +70,7 @@ def run_gene_experiments():
                 new_creatures.append(cr)
             
             for cr in pop.creatures:
-                if cr.get_max_height() == max_fit:
+                if cr.get_hybrid_fitness() == max_fit:
                     new_cr = creature.Creature(1)
                     new_cr.update_dna(cr.dna)
                     new_creatures[0] = new_cr

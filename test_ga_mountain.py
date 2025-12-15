@@ -16,8 +16,8 @@ class TestGA(unittest.TestCase):
             for cr in pop.creatures:
                 sim.run_creature(cr, 2400)            
             
-            # calculate fitness using maximum height achieved
-            fits = [cr.get_max_height() 
+            # calculate fitness using hybrid function (height + proximity to center)
+            fits = [cr.get_hybrid_fitness() 
                     for cr in pop.creatures]
             links = [len(cr.get_expanded_links()) 
                     for cr in pop.creatures]
@@ -44,7 +44,7 @@ class TestGA(unittest.TestCase):
             # keep the best creature (save every 10th generation)
             max_fit = np.max(fits)
             for cr in pop.creatures:
-                if cr.get_max_height() == max_fit:
+                if cr.get_hybrid_fitness() == max_fit:
                     new_cr = creature.Creature(1)
                     new_cr.update_dna(cr.dna)
                     new_creatures[0] = new_cr

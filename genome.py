@@ -16,8 +16,8 @@ class Genome():
     @staticmethod
     def get_gene_spec():
         gene_spec =  {"link-shape":{"scale":1}, 
-            "link-length": {"scale":2},
-            "link-radius": {"scale":1},
+            "link-length": {"scale":1},
+            "link-radius": {"scale":0.5},
             "link-recurrence": {"scale":3},
             "link-mass": {"scale":1},
             "joint-type": {"scale":1},
@@ -83,7 +83,7 @@ class Genome():
             assert parent_ind < len(parent_names), "genome.py: parent ind too high: " + str(parent_ind) + "got: " + str(parent_names)
             parent_name = parent_names[int(parent_ind)]
             #print("available parents: ", parent_names, "chose", parent_name)
-            recur = gdict["link-recurrence"]
+            recur = int(gdict["link-recurrence"]) + 1
             link = URDFLink(name=link_name, 
                             parent_name=parent_name, 
                             recur=recur+1, 

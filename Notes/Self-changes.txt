@@ -103,6 +103,13 @@ p.connect(p.GUI)
 ================================================================
 
 
+genome.py:
+Reduced link-length and link-radius by half
+
+"link-length": {"scale":1},
+"link-radius": {"scale":0.5},
+
+
 
 
 
@@ -117,3 +124,21 @@ run_all_experiments.py = Run the full experiment and generate the graph
 Whats in the csv file?
 Each CSV file stores the creature's DNA as a series of genes. Each gene is a row of numbers between 0 and 1 that encode the creature's body plan.
 
+
+
+- increase yellow space on floor
+- use [-5.3, 0, 0.5] positioning
+- ensure its moving towards center
+
+
+
+
+
+How is fitness determined
+==================
+
+Need a way to reward the creature for climbing the peak, but also reward it for getting closer to the peak. So the system set up is
+
+fitness = max_height + (proximity_score * 0.5)
+
+This rewards both climbing, and getting closer in proximity to the peak, but still puts climbing as a priority.

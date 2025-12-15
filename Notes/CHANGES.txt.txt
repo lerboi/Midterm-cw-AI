@@ -959,3 +959,323 @@ AFTER:
 ================================================================================
 END OF CHANGE #7
 ================================================================================
+
+
+================================================================================
+CHANGE #8: Fixed Spawn Position to Mountain Base/Edge
+Date: 2024-12-15
+Files: simulation.py (MODIFIED)
+       realtime_from_csv.py (MODIFIED)
+Reason: Creatures were spawning inside mountain at center (0,0). Need to spawn
+        at edge/base of mountain on flat floor so creatures must move toward
+        center and climb up the slope.
+================================================================================
+
+HIGH-LEVEL SUMMARY:
+- Changed spawn position from (0, 0, 1.5) to (5, 0, 0.5)
+- Creatures now spawn at mountain base/edge on flat floor
+- Must move horizontally toward center (0,0) where mountain peak is
+- Then climb vertically up the slope
+- Prevents spawning inside mountain geometry
+
+PROBLEM IDENTIFIED:
+- Mountain is centered at (0, 0) with peak at z≈4
+- Previous spawn at (0, 0, 1.5) placed creatures inside mountain
+- Creatures clipped through geometry or got stuck
+- No need to navigate toward mountain
+
+SOLUTION IMPLEMENTED:
+- Spawn at (5, 0, 0.5) - at edge of mountain on flat floor
+- X=5: Just outside mountain radius (~3-4 units), on flat arena floor
+- Y=0: Along axis for simple path to center
+- Z=0.5: Slightly above floor to prevent clipping
+- Creatures must move toward (0,0) to encounter slope and climb
+
+FUNCTION-LEVEL CHANGES:
+
+1. simulation.py - Updated spawn position in run_creature()
+   - Changed from (0, 0, 1.5) to (5, 0, 0.5)
+   - Updated comment to clarify spawn location
+
+2. realtime_from_csv.py - Updated spawn position
+   - Changed from (0, 0, 1.5) to (5, 0, 0.5)
+   - Updated comment to clarify spawn location
+
+LINE-BY-LINE CODE CHANGES:
+
+LOCATION: simulation.py, run_creature method
+BEFORE:
+        # Spawn creature at base of mountain (not dropped from height)
+        # Mountain base is at z=-1, but surface rises, spawn at z=1.5 to be above surface
+        p.resetBasePositionAndOrientation(cid, [0, 0, 1.5], [0, 0, 0, 1], physicsClientId=pid)
+
+AFTER:
+        # Spawn creature at edge of mountain on flat floor
+        # Mountain centered at (0,0), spawn at (5,0,0.5) - edge/base on flat floor
+        # Creature must move toward center to climb mountain
+        p.resetBasePositionAndOrientation(cid, [5, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
+
+---
+
+LOCATION: realtime_from_csv.py, main function
+BEFORE:
+    # Spawn at base of mountain (not dropped from height)
+    p.resetBasePositionAndOrientation(rob1, [0, 0, 1.5], [0, 0, 0, 1], physicsClientId=pid)
+
+AFTER:
+    # Spawn at edge of mountain on flat floor
+    # Mountain centered at (0,0), spawn at (5,0,0.5) - must move toward center to climb
+    p.resetBasePositionAndOrientation(rob1, [5, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
+
+================================================================================
+END OF CHANGE #8
+================================================================================
+
+
+================================================================================
+CHANGE #9: Arena Size Increase, Spawn Position Fix, and Creature Size Reduction
+Date: 2024-12-15
+Files: simulation.py (MODIFIED)
+       realtime_from_csv.py (MODIFIED)
+       genome.py (MODIFIED)
+Reason: (1) Increase yellow floor space and gap between walls and mountain
+        (2) Fix spawn position to verified mountain base location
+        (3) Reduce creature size by half for better proportions relative to mountain
+================================================================================
+
+HIGH-LEVEL SUMMARY:
+- Increased arena size from 20 to 40 units (double the floor space)
+- Fixed spawn position to [-5.3, 0, 0.5] (verified mountain base location)
+- Reduced creature size by half (link-length scale: 2→1, link-radius: 1→0.5)
+- More visible yellow floor, better spacing, correctly positioned creatures
+- Creatures now appropriately sized relative to 10-unit mountain
+
+PROBLEM IDENTIFIED:
+Multiple issues needed fixing:
+1. Arena too small (20x20) - mountain occupies 50% of floor space
+2. Spawn position incorrect - creatures spawning inside mountain geometry
+3. Creatures too large - 20-30% of mountain size, disproportionate
+
+SOLUTION IMPLEMENTED:
+1. Arena Size: 20 → 40
+   - Floor now 40x40 units instead of 20x20
+   - Mountain still 10x10 (unchanged)
+   - Gap between mountain edge (±5) and walls (±20) now 15 units instead of 5
+   - Much more visible yellow floor space
+
+2. Spawn Position: Various → [-5.3, 0, 0.5]
+   - Verified position at mountain base on flat floor
+   - Negative X side of mountain (left side)
+   - Creatures must move toward center (0,0) in +X direction
+   - No directional bias added - evolution discovers movement naturally
+
+3. Creature Size: Reduced by 50%
+   - link-length scale: 2 → 1 (max length now 1 unit instead of 2)
+   - link-radius scale: 1 → 0.5 (max radius now 0.5 units instead of 1)
+   - Creatures now 1-1.5 units total size vs previous 2-3 units
+   - Better proportioned relative to 10-unit wide mountain
+
+FUNCTION-LEVEL CHANGES:
+
+1. simulation.py - Updated arena size and spawn position in run_creature()
+   - Changed arena_size from 20 to 40
+   - Changed spawn from [5, 0, 0.5] to [-5.3, 0, 0.5]
+
+2. realtime_from_csv.py - Updated arena size and spawn position
+   - Changed arena_size from 20 to 40
+   - Changed spawn from [0.7, 0, 0.5] to [-5.3, 0, 0.5]
+
+3. genome.py - Reduced gene scales in get_gene_spec()
+   - link-length scale: 2 → 1
+   - link-radius scale: 1 → 0.5
+
+LINE-BY-LINE CODE CHANGES:
+
+LOCATION: simulation.py, run_creature method, line ~13
+BEFORE:
+        arena_size = 20
+
+AFTER:
+        arena_size = 40
+
+---
+
+LOCATION: simulation.py, run_creature method, line ~29
+BEFORE:
+        # Spawn creature at edge of mountain on flat floor
+        # Mountain centered at (0,0), spawn at (5,0,0.5) - edge/base on flat floor
+        # Creature must move toward center to climb mountain
+        p.resetBasePositionAndOrientation(cid, [5, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
+
+AFTER:
+        # Spawn creature at mountain base on flat floor
+        # Mountain centered at (0,0), spawn at (-5.3,0,0.5) - at base of slope
+        # Creature must move toward center (+X direction) to climb mountain
+        p.resetBasePositionAndOrientation(cid, [-5.3, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
+
+---
+
+LOCATION: realtime_from_csv.py, main function, line ~20
+BEFORE:
+    arena_size = 20
+
+AFTER:
+    arena_size = 40
+
+---
+
+LOCATION: realtime_from_csv.py, main function, line ~45
+BEFORE:
+    # Spawn at edge of mountain on flat floor
+    # Mountain centered at (0,0), spawn at (5,0,0.5) - must move toward center to climb
+    p.resetBasePositionAndOrientation(rob1, [0.7, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
+
+AFTER:
+    # Spawn at mountain base on flat floor
+    # Mountain centered at (0,0), spawn at (-5.3,0,0.5) - at base of slope
+    p.resetBasePositionAndOrientation(rob1, [-5.3, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
+
+---
+
+LOCATION: genome.py, get_gene_spec method
+BEFORE:
+        gene_spec =  {"link-shape":{"scale":1}, 
+            "link-length": {"scale":2},
+            "link-radius": {"scale":1},
+
+AFTER:
+        gene_spec =  {"link-shape":{"scale":1}, 
+            "link-length": {"scale":1},
+            "link-radius": {"scale":0.5},
+
+================================================================================
+END OF CHANGE #9
+================================================================================
+
+
+================================================================================
+CHANGE #10: Mountain Enlargement and Climbability Improvements
+Date: 2024-12-15
+Files: shapes/gaussian_pyramid.obj (REGENERATED)
+       simulation.py (MODIFIED)
+       realtime_from_csv.py (MODIFIED)
+       prepare_shapes.py (USED TO REGENERATE)
+Reason: Make mountain more climbable with gentler slope and more texture,
+        increase size to 15x15 base for more impressive visual presence
+================================================================================
+
+HIGH-LEVEL SUMMARY:
+- Regenerated mountain mesh with larger base (10x10 → 15x15)
+- Increased height (5 units → 6 units, 20% taller)
+- Made slope gentler (sigma: 3 → 5) for easier climbing
+- Added more texture/grip (noise factor: 1.0 → 0.8) for better traction
+- Updated spawn positions to match new mountain edge at -7.5
+- Mountain now more visually impressive and easier to climb
+
+PROBLEM IDENTIFIED:
+Previous mountain was:
+- Too small (10x10) relative to 40x40 arena
+- Too steep near edges (hard for creatures to climb)
+- Smooth surface (less grip/traction)
+- Not challenging/impressive enough
+
+SOLUTION IMPLEMENTED:
+New mountain parameters:
+- Base size: 15x15 units (50% larger)
+- Height: 6 units (20% taller than previous 5)
+- Sigma: 5 (gentler slope - was 3)
+- Noise scale: 0.3 (more variation)
+- Noise factor: 0.8 (more texture for grip - was 1.0)
+- Mountain edges now at ±7.5 instead of ±5
+
+Benefits:
+- Gentler slope = easier for creatures to make progress
+- More texture = better grip/traction points
+- Larger size = more impressive visually
+- Taller = more challenging overall
+- Still fits well in 40x40 arena (37.5% coverage vs 25%)
+
+FUNCTION-LEVEL CHANGES:
+
+1. prepare_shapes.py - Modified generation function
+   - Created generate_gaussian_pyramid_climbable() function
+   - Parameters: size=15, height=6, sigma=5, noise_scale=0.3, noise_factor=0.8
+
+2. gaussian_pyramid.obj - Completely regenerated
+   - New vertices spanning x,y: -7.5 to 7.5 (was -5 to 5)
+   - Peak at approximately z=6 (was z=5)
+   - Gentler slope profile throughout
+   - More surface texture from Perlin noise
+
+3. simulation.py - Updated spawn position
+   - Changed from [-5.3, 0, 0.5] to [-7.8, 0, 0.5]
+   - Now at edge of new larger mountain
+
+4. realtime_from_csv.py - Updated spawn position
+   - Changed from [-5.3, 0, 0.5] to [-7.8, 0, 0.5]
+   - Matches training spawn position
+
+LINE-BY-LINE CODE CHANGES:
+
+LOCATION: simulation.py, run_creature method, spawn position
+BEFORE:
+        # Spawn creature at mountain base on flat floor
+        # Mountain centered at (0,0), spawn at (-5.3,0,0.5) - at base of slope
+        # Creature must move toward center (+X direction) to climb mountain
+        p.resetBasePositionAndOrientation(cid, [-5.3, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
+
+AFTER:
+        # Spawn creature at mountain base on flat floor
+        # Mountain centered at (0,0), spawn at (-7.8,0,0.5) - at base of slope
+        # Creature must move toward center (+X direction) to climb mountain
+        # Mountain now 15x15 with edges at ±7.5
+        p.resetBasePositionAndOrientation(cid, [-7.8, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
+
+---
+
+LOCATION: realtime_from_csv.py, main function, spawn position
+BEFORE:
+    # Spawn at mountain base on flat floor
+    # Mountain centered at (0,0), spawn at (-5.3,0,0.5) - at base of slope
+    p.resetBasePositionAndOrientation(rob1, [-5.3, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
+
+AFTER:
+    # Spawn at mountain base on flat floor
+    # Mountain centered at (0,0), spawn at (-7.8,0,0.5) - at base of slope
+    # Mountain now 15x15 with edges at ±7.5
+    p.resetBasePositionAndOrientation(rob1, [-7.8, 0, 0.5], [0, 0, 0, 1], physicsClientId=pid)
+
+---
+
+MOUNTAIN GENERATION PARAMETERS:
+Used in prepare_shapes.py to regenerate gaussian_pyramid.obj:
+
+def generate_gaussian_pyramid_climbable(
+    filename, 
+    size=15,              # Base size (was 10)
+    resolution=0.5,       # Mesh resolution (unchanged)
+    sigma=5,              # Slope gentleness (was 3)
+    height=6,             # Peak height (was 5)
+    noise_scale=0.3,      # Texture detail (was 0.5)
+    noise_factor=0.8      # Texture intensity (was 1.0)
+)
+
+Gaussian function: height * exp(-((x² + y²) / (2 * sigma²)))
+- Larger sigma = gentler slope
+- sigma=5 vs sigma=3 = ~40% gentler slope gradient
+
+WORLD COORDINATES:
+After loading at position (0, 0, -1):
+- Mountain base (flat): z = -1
+- Mountain edges (±7.5, 0): z ≈ 0.8 to 2.0
+- Mountain mid-radius (±3.75, 0): z ≈ 3.5 to 4.5
+- Mountain peak (0, 0): z ≈ 5.0 (6 - 1)
+
+Creature spawn at (-7.8, 0, 0.5):
+- Just beyond mountain edge
+- On arena floor
+- 0.3 units from mountain base slope
+
+================================================================================
+END OF CHANGE #10
+================================================================================
