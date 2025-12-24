@@ -117,9 +117,11 @@ class Genome():
     def crossover(g1, g2):
         x1 = random.randint(0, len(g1)-1)
         x2 = random.randint(0, len(g2)-1)
-        g3 = np.concatenate((g1[x1:], g2[x2:])) 
+        # Combine genes from both parents as a list (not numpy array)
+        # Each gene is a numpy array, genome is a list of genes
+        g3 = list(g1[x1:]) + list(g2[x2:])
         if len(g3) > len(g1):
-            g3 = g3[0:len(g1)] 
+            g3 = g3[0:len(g1)]
         return g3
 
     @staticmethod
@@ -179,13 +181,15 @@ class Genome():
     def from_csv(filename):
         csv_str = ''
         with open(filename) as f:
-            csv_str = f.read()   
+            csv_str = f.read()
         dna = []
         lines = csv_str.split('\n')
         for line in lines:
             vals = line.split(',')
-            gene = [float(v) for v in vals if v != '']
-            if len(gene) > 0:
+            gene_values = [float(v) for v in vals if v != '']
+            if len(gene_values) > 0:
+                # Convert to numpy array to match get_random_genome() return type
+                gene = np.array(gene_values)
                 dna.append(gene)
         return dna
 

@@ -335,5 +335,54 @@ Date: 2024-12-24
     - After: Child at X=0.05, Z=2.325 (attached at parent's endpoint)
 
 ================================================================================
+VERSION 2.4 - GA Consistency Fixes
+================================================================================
+
+Date: 2024-12-24
+
+19. TEST_GA.PY UPDATED TO USE HYBRID FITNESS (test_ga.py)
+    -------------------------------------------------------------------------
+    Problem: test_ga.py used get_distance_travelled() while test_ga_mountain.py
+             used get_hybrid_fitness(). Inconsistent fitness metrics.
+
+    Before:
+        fits = [cr.get_distance_travelled() for cr in pop.creatures]
+
+    After:
+        fits = [cr.get_hybrid_fitness() for cr in pop.creatures]
+
+    Also updated:
+    - Elitism check uses get_hybrid_fitness()
+    - Elite creatures saved to elite_creatures/ directory
+    - Comments clarified for mountain climbing task
+
+20. CROSSOVER RETURN TYPE FIXED (genome.py:116-125)
+    -------------------------------------------------------------------------
+    Problem: np.concatenate() returned numpy.ndarray, but genome should be
+             list of numpy arrays (each gene is an array).
+
+    Before:
+        g3 = np.concatenate((g1[x1:], g2[x2:]))  # Returns ndarray!
+
+    After:
+        g3 = list(g1[x1:]) + list(g2[x2:])  # Returns list of arrays
+
+21. FROM_CSV RETURN TYPE FIXED (genome.py:180-194)
+    -------------------------------------------------------------------------
+    Problem: from_csv() returned list of lists, but get_random_genome()
+             returns list of numpy arrays. Type mismatch.
+
+    Before:
+        gene = [float(v) for v in vals if v != '']
+        dna.append(gene)  # Appends list!
+
+    After:
+        gene_values = [float(v) for v in vals if v != '']
+        gene = np.array(gene_values)  # Convert to numpy array
+        dna.append(gene)
+
+    Impact: Loaded creatures now have consistent data types with fresh ones.
+
+================================================================================
 END OF CHANGELOG
 ================================================================================
