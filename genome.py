@@ -68,8 +68,10 @@ class Genome():
                 #print("exp: ", c.name, " -> ", uniq_name)
                 c_copy.name = uniq_name
                 c_copy.sibling_ind = sibling_ind
+                # Store parent's link_length for proper joint positioning
+                c_copy.parent_link_length = parent_link.link_length
                 exp_links.append(c_copy)
-                assert c.parent_name != c.name, "Genome::expandLinks: link joined to itself: " + c.name + " joins " + c.parent_name 
+                assert c.parent_name != c.name, "Genome::expandLinks: link joined to itself: " + c.name + " joins " + c.parent_name
                 Genome.expandLinks(c, uniq_name, flat_links, exp_links)
 
     @staticmethod
@@ -188,9 +190,9 @@ class Genome():
         return dna
 
 class URDFLink:
-    def __init__(self, name, parent_name, recur, 
-                link_length=0.1, 
-                link_radius=0.1, 
+    def __init__(self, name, parent_name, recur,
+                link_length=0.1,
+                link_radius=0.1,
                 link_mass=0.1,
                 joint_type=0.1,
                 joint_parent=0.1,
@@ -206,8 +208,8 @@ class URDFLink:
                 control_freq=0.1):
         self.name = name
         self.parent_name = parent_name
-        self.recur = recur 
-        self.link_length=link_length 
+        self.recur = recur
+        self.link_length=link_length
         self.link_radius=link_radius
         self.link_mass=link_mass
         self.joint_type=joint_type
@@ -223,6 +225,9 @@ class URDFLink:
         self.control_amp=control_amp
         self.control_freq=control_freq
         self.sibling_ind = 1
+        # Parent's link length - needed for proper joint positioning
+        # Will be set during expandLinks() for child links
+        self.parent_link_length = 0.1
 
     def to_link_element(self, adom):
         #         <link name="base_link">
@@ -339,11 +344,13 @@ class URDFLink:
         
         orig_tag.setAttribute("rpy", rpy)
         # Position joint at end of parent link to prevent floating/detached limbs
-        # xyz_1 is scaled by link_length to connect at link endpoint
-        # xyz_2 and xyz_3 are small offsets for variation
-        xyz_1 = self.link_length * 0.5 + self.joint_origin_xyz_1 * 0.1
-        xyz_2 = self.joint_origin_xyz_2 * 0.1
-        xyz_3 = self.joint_origin_xyz_3 * 0.1
+        # URDF cylinders extend along Z-axis, so offset must be in Z (xyz_3)
+        # Use parent's link_length (not child's) to position at parent's endpoint
+        # Enforce minimum parent length for joint calculation
+        parent_len = max(self.parent_link_length, 0.1)
+        xyz_1 = self.joint_origin_xyz_1 * 0.1  # Small X offset for variation
+        xyz_2 = self.joint_origin_xyz_2 * 0.1  # Small Y offset for variation
+        xyz_3 = parent_len * 0.5 + self.joint_origin_xyz_3 * 0.1  # Z = parent endpoint
         xyz = str(xyz_1) + " " + str(xyz_2) + " " + str(xyz_3)
         orig_tag.setAttribute("xyz", xyz)
 

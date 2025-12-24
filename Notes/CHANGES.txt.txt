@@ -286,5 +286,54 @@ Date: 2024-12-24
     - genome.py: Lines 19-20
 
 ================================================================================
+VERSION 2.3 - Floating Limbs Fix (Root Cause)
+================================================================================
+
+Date: 2024-12-24
+
+17. JOINT ORIGIN AXIS CORRECTED (genome.py:346-355)
+    -------------------------------------------------------------------------
+    Problem: Joint origin was offset in X-axis, but URDF cylinders extend
+             along Z-axis. This placed child links BESIDE parents instead
+             of at their endpoints.
+
+    Diagnostic showed:
+    - Child at (0.57, 0, 2.0) - beside parent
+    - Should be at (0, 0, 2.325) - at parent's top endpoint
+
+    Before:
+        xyz_1 = self.link_length * 0.5 + self.joint_origin_xyz_1 * 0.1
+        xyz_2 = self.joint_origin_xyz_2 * 0.1
+        xyz_3 = self.joint_origin_xyz_3 * 0.1
+
+    After:
+        parent_len = max(self.parent_link_length, 0.1)
+        xyz_1 = self.joint_origin_xyz_1 * 0.1  # Small X offset
+        xyz_2 = self.joint_origin_xyz_2 * 0.1  # Small Y offset
+        xyz_3 = parent_len * 0.5 + self.joint_origin_xyz_3 * 0.1  # Z = parent endpoint
+
+18. PARENT LINK LENGTH STORED IN CHILD (genome.py:72, 226-228)
+    -------------------------------------------------------------------------
+    Problem: to_joint_element() had no access to parent's link_length,
+             only the parent's name (string). Used child's length instead.
+
+    Solution:
+    - Added parent_link_length attribute to URDFLink class
+    - Store parent's link_length in child during expandLinks()
+
+    Added to URDFLink.__init__():
+        self.parent_link_length = 0.1
+
+    Added to expandLinks():
+        c_copy.parent_link_length = parent_link.link_length
+
+    Files affected:
+    - genome.py: Lines 72, 226-228, 346-355
+
+    Result:
+    - Before: Child at X=0.57, Z=2.0 (floating beside parent)
+    - After: Child at X=0.05, Z=2.325 (attached at parent's endpoint)
+
+================================================================================
 END OF CHANGELOG
 ================================================================================
