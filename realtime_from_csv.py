@@ -42,7 +42,7 @@ def main(csv_file):
     rob1 = p.loadURDF('test.urdf', physicsClientId=pid)
     
     # Spawn at base of mountain (not dropped from height)
-    p.resetBasePositionAndOrientation(rob1, [-7.8, 0, 3], [0, 0, 0, 1], physicsClientId=pid)
+    p.resetBasePositionAndOrientation(rob1, [5, 0, 3], [0, 0, 0, 1], physicsClientId=pid)
     
     # Brief settling period
     for i in range(480):

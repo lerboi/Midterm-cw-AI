@@ -33,7 +33,7 @@ class Simulation:
         cid = p.loadURDF(xml_file, physicsClientId=pid)
 
         # Spawn creature at base of mountain (not dropped from height)
-        p.resetBasePositionAndOrientation(cid, [-7.8, 0, 3], [0, 0, 0, 1], physicsClientId=pid)
+        p.resetBasePositionAndOrientation(cid, [5, 0, 3], [0, 0, 0, 1], physicsClientId=pid)
 
        # Phase 1: Brief settling period (480 steps = 0.5 seconds)
         for step in range(480):
