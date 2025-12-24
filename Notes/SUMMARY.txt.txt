@@ -85,7 +85,7 @@ JOINTS (connections between body parts):
      (prevents floating/detached limbs)
 
 MOTORS (what makes the creature move):
-   - Control the joints with force = 10N (constant for fair testing)
+   - Control the joints with force = 5N (constant for fair testing)
    - Can move in different patterns:
      * PULSE: on-off-on-off (like a piston)
      * SINE: smooth wave motion (like swimming)
@@ -158,14 +158,14 @@ NEW FITNESS FUNCTION (how we measure success):
    - Baseline is set after creature settles (prevents spawn height cheating)
 
 SPAWN POSITION:
-   - Creatures spawn at (5, 0, 3) - at base of mountain
+   - Creatures spawn at (-3, 0, 2) - close to mountain base on gentler slope
    - 480 steps settling time before fitness tracking begins
 
 CHALLENGE:
    - Climbing requires different skills than moving horizontally
    - Creatures need to grip, push, pull themselves upward
    - They need to stay on the mountain surface (not cheat by flying)
-   - Motor force of 10N helps creatures generate climbing torque
+   - Motor force of 5N provides consistent testing conditions
 
 ================================================================================
 6. HOW DOES THE WHOLE SYSTEM WORK STEP-BY-STEP?
@@ -196,14 +196,14 @@ PHASE 2: SIMULATION
       - Load Gaussian pyramid mountain
       - Set gravity to -10 m/s²
 
-   b) Place creature at starting position (5, 0, 3)
+   b) Place creature at starting position (-3, 0, 2)
       - Creature settles for 480 steps (2 seconds)
       - Baseline height recorded after settling
 
    c) Run physics simulation for 2400 time steps (~10 seconds):
       - Every 24 steps (0.1 seconds):
         * Update motors (calculate new joint velocities)
-        * Apply motor forces (10N) to joints
+        * Apply motor forces (5N) to joints
       - Every step:
         * Physics engine calculates gravity, collisions, movements
         * Record creature's position
@@ -211,8 +211,8 @@ PHASE 2: SIMULATION
 
    d) After simulation ends:
       - Calculate hybrid fitness = max_height + proximity_score
-      - Example: Creature reached height 2.5, distance 3.0 from center
-        Fitness = 2.5 + (5.0 - 3.0) = 4.5
+      - Example: Creature reached height 2.5, distance 2.0 from center
+        Fitness = 2.5 + (3.0 - 2.0) = 3.5
 
 PHASE 3: SELECTION & REPRODUCTION
 ----------------------------------
@@ -261,9 +261,9 @@ TASK 1: Modified creature.py
 TASK 2: Modified simulation.py
    - Replaced flat plane with mountain environment
    - Added make_arena() and load_mountain() functions
-   - Spawn creatures at (5, 0, 3) near mountain base
+   - Spawn creatures at (-3, 0, 2) near mountain base on gentler slope
    - Track height relative to baseline (after settling)
-   - Increased motor force to 10N for climbing
+   - Motor force at 5N for consistent testing
 
 TASK 3: Created test_ga_mountain.py
    - Uses mountain simulation
@@ -339,8 +339,10 @@ HIGH-PRIORITY FIXES:
 7. Proper inertia calculation (realistic rotation)
 8. Recurrence scale reduced (simpler creatures)
 9. Shallow copy bug fixed (mutations don't corrupt parents)
-10. Motor force increased (10N for climbing)
+10. Motor force at 5N (constant for fair testing)
 11. Spawn distance corrected (fitness calculation accurate)
+12. Spawn moved closer to mountain (-3, 0, 2)
+13. Creature size reduced by 1/3 (link-length: 1.3, link-radius: 0.65)
 
 See CHANGES.txt.txt for detailed before/after code snippets.
 
@@ -361,7 +363,7 @@ fitness = max_height + proximity_score
 
 Where:
 - max_height = highest z-coordinate reached (relative to settled baseline)
-- proximity_score = 5.0 - distance_to_center (rewards getting closer to peak)
+- proximity_score = 3.0 - distance_to_center (rewards getting closer to peak)
 
 This rewards BOTH climbing AND getting closer to the peak.
 

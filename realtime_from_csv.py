@@ -41,8 +41,8 @@ def main(csv_file):
     # load it into the sim
     rob1 = p.loadURDF('test.urdf', physicsClientId=pid)
     
-    # Spawn at base of mountain on gentler slope side
-    p.resetBasePositionAndOrientation(rob1, [-5, 0, 3], [0, 0, 0, 1], physicsClientId=pid)
+    # Spawn at base of mountain on gentler slope side (closer to peak)
+    p.resetBasePositionAndOrientation(rob1, [-3, 0, 2], [0, 0, 0, 1], physicsClientId=pid)
     
     # Brief settling period
     for i in range(480):

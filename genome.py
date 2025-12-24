@@ -16,8 +16,8 @@ class Genome():
     @staticmethod
     def get_gene_spec():
         gene_spec =  {"link-shape":{"scale":1},
-            "link-length": {"scale":2},
-            "link-radius": {"scale":1},
+            "link-length": {"scale":1.3},  # Reduced from 2 to 1.3 (smaller creatures)
+            "link-radius": {"scale":0.65},  # Reduced from 1 to 0.65 (smaller creatures)
             "link-recurrence": {"scale":2},  # Reduced from 3 to 2 for simpler creatures
             "link-mass": {"scale":1},
             "joint-type": {"scale":1},

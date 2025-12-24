@@ -247,5 +247,44 @@ experiments/create_graphs.py:
   - Fixed all file paths from "/results/" to "../results/"
 
 ================================================================================
+VERSION 2.2 - Creature Size and Spawn Adjustments
+================================================================================
+
+Date: 2024-12-24
+
+15. SPAWN POSITION MOVED CLOSER TO MOUNTAIN
+    -------------------------------------------------------------------------
+    Problem: Creatures spawning at (-5, 0, 3) were too far from the mountain
+    Impact:  Creatures had to travel further before starting to climb
+
+    Before:
+        p.resetBasePositionAndOrientation(cid, [-5, 0, 3], ...)
+
+    After:
+        p.resetBasePositionAndOrientation(cid, [-3, 0, 2], ...)
+        # Spawns closer to the mountain for better climbing interaction
+
+    Files affected:
+    - simulation.py: Line 36
+    - realtime_from_csv.py: Line 45
+    - creature.py: Lines 154, 168 (updated default distance from 5.0 to 3.0)
+
+16. CREATURE SIZE REDUCED BY 1/3
+    -------------------------------------------------------------------------
+    Problem: Creatures were too large relative to the mountain
+    Impact:  Large creatures had difficulty maneuvering on the mountain
+
+    Before:
+        "link-length": {"scale":2}     # Links up to 2 units long
+        "link-radius": {"scale":1}     # Links up to 1 unit radius
+
+    After:
+        "link-length": {"scale":1.3}   # Links up to 1.3 units long
+        "link-radius": {"scale":0.65}  # Links up to 0.65 unit radius
+
+    File affected:
+    - genome.py: Lines 19-20
+
+================================================================================
 END OF CHANGELOG
 ================================================================================
