@@ -60,10 +60,10 @@ class Simulation:
                                         physicsClientId=self.physicsClientId)):
             m = cr.get_motors()[jid]
 
-            p.setJointMotorControl2(cid, jid, 
-                    controlMode=p.VELOCITY_CONTROL, 
-                    targetVelocity=m.get_output(), 
-                    force = 5, 
+            p.setJointMotorControl2(cid, jid,
+                    controlMode=p.VELOCITY_CONTROL,
+                    targetVelocity=m.get_output(),
+                    force=10,  # Increased from 5 for better climbing ability
                     physicsClientId=self.physicsClientId)
         
 

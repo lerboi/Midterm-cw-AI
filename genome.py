@@ -15,10 +15,10 @@ class Genome():
 
     @staticmethod
     def get_gene_spec():
-        gene_spec =  {"link-shape":{"scale":1}, 
+        gene_spec =  {"link-shape":{"scale":1},
             "link-length": {"scale":2},
             "link-radius": {"scale":1},
-            "link-recurrence": {"scale":3},
+            "link-recurrence": {"scale":2},  # Reduced from 3 to 2 for simpler creatures
             "link-mass": {"scale":1},
             "joint-type": {"scale":1},
             "joint-parent":{"scale":1},
@@ -122,12 +122,13 @@ class Genome():
 
     @staticmethod
     def point_mutate(genome, rate, amount):
-        new_genome = copy.copy(genome)
+        # Deep copy to prevent corruption of parent DNA
+        new_genome = [gene.copy() for gene in genome]
         for gene in new_genome:
             for i in range(len(gene)):
                 if random.random() < rate:
-                    # Bidirectional mutation: can increase OR decrease
-                    gene[i] += random.uniform(-0.1, 0.1)
+                    # Bidirectional mutation using the amount parameter
+                    gene[i] += random.uniform(-amount, amount)
                 # Clamp to valid range [0, 1)
                 if gene[i] >= 1.0:
                     gene[i] = 0.9999
@@ -138,23 +139,28 @@ class Genome():
     @staticmethod
     def shrink_mutate(genome, rate):
         if len(genome) == 1:
-            return copy.copy(genome)
+            # Deep copy to prevent corruption of parent DNA
+            return [gene.copy() for gene in genome]
         if random.random() < rate:
             ind = random.randint(0, len(genome)-1)
-            new_genome = np.delete(genome, ind, 0)
+            # Create new list without the removed gene
+            new_genome = [gene.copy() for i, gene in enumerate(genome) if i != ind]
             return new_genome
         else:
-            return copy.copy(genome)
+            # Deep copy to prevent corruption of parent DNA
+            return [gene.copy() for gene in genome]
 
     @staticmethod
     def grow_mutate(genome, rate):
         if random.random() < rate:
             gene = Genome.get_random_gene(len(genome[0]))
-            new_genome = copy.copy(genome)
-            new_genome = np.append(new_genome, [gene], axis=0)
+            # Deep copy existing genes and append new one
+            new_genome = [g.copy() for g in genome]
+            new_genome.append(gene)
             return new_genome
         else:
-            return copy.copy(genome)
+            # Deep copy to prevent corruption of parent DNA
+            return [gene.copy() for gene in genome]
 
     @staticmethod
     def to_csv(dna, csv_file):
@@ -231,57 +237,68 @@ class URDFLink:
         #       </geometry>
         #     </collision>
         #     <inertial>
-        # 	    <mass value="0.25"/>
-        # 	    <inertia ixx="0.0003" iyy="0.0003" izz="0.0003" ixy="0" ixz="0" iyz="0"/>
+        #       <mass value="0.25"/>
+        #       <inertia ixx="0.0003" iyy="0.0003" izz="0.0003" ixy="0" ixz="0" iyz="0"/>
         #     </inertial>
         #   </link>
-  
+
+        # Enforce minimum link sizes to prevent physics instability
+        min_length = 0.1
+        min_radius = 0.05
+        actual_length = max(self.link_length, min_length)
+        actual_radius = max(self.link_radius, min_radius)
+
         link_tag = adom.createElement("link")
         link_tag.setAttribute("name", self.name)
         vis_tag = adom.createElement("visual")
         geom_tag = adom.createElement("geometry")
         cyl_tag = adom.createElement("cylinder")
-        cyl_tag.setAttribute("length", str(self.link_length))
-        cyl_tag.setAttribute("radius", str(self.link_radius))
-        
+        cyl_tag.setAttribute("length", str(actual_length))
+        cyl_tag.setAttribute("radius", str(actual_radius))
+
         geom_tag.appendChild(cyl_tag)
         vis_tag.appendChild(geom_tag)
-        
-        
+
+
         coll_tag = adom.createElement("collision")
         c_geom_tag = adom.createElement("geometry")
         c_cyl_tag = adom.createElement("cylinder")
-        c_cyl_tag.setAttribute("length", str(self.link_length))
-        c_cyl_tag.setAttribute("radius", str(self.link_radius))
-        
+        c_cyl_tag.setAttribute("length", str(actual_length))
+        c_cyl_tag.setAttribute("radius", str(actual_radius))
+
         c_geom_tag.appendChild(c_cyl_tag)
         coll_tag.appendChild(c_geom_tag)
-        
+
         #     <inertial>
-        # 	    <mass value="0.25"/>
-        # 	    <inertia ixx="0.0003" iyy="0.0003" izz="0.0003" ixy="0" ixz="0" iyz="0"/>
+        #       <mass value="0.25"/>
+        #       <inertia ixx="0.0003" iyy="0.0003" izz="0.0003" ixy="0" ixz="0" iyz="0"/>
         #     </inertial>
         inertial_tag = adom.createElement("inertial")
         mass_tag = adom.createElement("mass")
-        # pi r^2 * height
-        mass = np.pi * (self.link_radius * self.link_radius) * self.link_length
+        # Mass = density * volume = pi * r^2 * height (assuming density = 1)
+        mass = np.pi * (actual_radius * actual_radius) * actual_length
         mass_tag.setAttribute("value", str(mass))
         inertia_tag = adom.createElement("inertia")
-        # <inertia ixx="0.0003" iyy="0.0003" izz="0.0003" ixy="0" ixz="0" iyz="0"/>
-        inertia_tag.setAttribute("ixx", "0.03")
-        inertia_tag.setAttribute("iyy", "0.03")
-        inertia_tag.setAttribute("izz", "0.03")
+        # Calculate proper inertia for a solid cylinder
+        # Ixx = Iyy = (1/12) * m * (3*r^2 + h^2)
+        # Izz = (1/2) * m * r^2
+        ixx = (1.0/12.0) * mass * (3 * actual_radius * actual_radius + actual_length * actual_length)
+        iyy = ixx
+        izz = (1.0/2.0) * mass * actual_radius * actual_radius
+        inertia_tag.setAttribute("ixx", str(ixx))
+        inertia_tag.setAttribute("iyy", str(iyy))
+        inertia_tag.setAttribute("izz", str(izz))
         inertia_tag.setAttribute("ixy", "0")
         inertia_tag.setAttribute("ixz", "0")
-        inertia_tag.setAttribute("iyx", "0")
+        inertia_tag.setAttribute("iyz", "0")
         inertial_tag.appendChild(mass_tag)
         inertial_tag.appendChild(inertia_tag)
-        
+
 
         link_tag.appendChild(vis_tag)
         link_tag.appendChild(coll_tag)
         link_tag.appendChild(inertial_tag)
-        
+
         return link_tag
 
     def to_joint_element(self, adom):
@@ -294,10 +311,8 @@ class URDFLink:
         #   </joint>
         joint_tag = adom.createElement("joint")
         joint_tag.setAttribute("name", self.name + "_to_" + self.parent_name)
-        if self.joint_type >= 0.5:
-            joint_tag.setAttribute("type", "revolute")
-        else:
-            joint_tag.setAttribute("type", "revolute")
+        # All joints are revolute type for consistent behavior
+        joint_tag.setAttribute("type", "revolute")
         parent_tag = adom.createElement("parent")
         parent_tag.setAttribute("link", self.parent_name)
         child_tag = adom.createElement("child")
@@ -313,8 +328,8 @@ class URDFLink:
         limit_tag = adom.createElement("limit")
         # effort upper lower velocity
         limit_tag.setAttribute("effort", "1")
-        limit_tag.setAttribute("upper", "-3.1415")
-        limit_tag.setAttribute("lower", "3.1415")
+        limit_tag.setAttribute("upper", "3.1415")
+        limit_tag.setAttribute("lower", "-3.1415")
         limit_tag.setAttribute("velocity", "1")
         # <origin rpy="0 0 0" xyz="0 0.5 0"/>
         orig_tag = adom.createElement("origin")
@@ -323,7 +338,13 @@ class URDFLink:
         rpy = str(rpy1) + " " + str(self.joint_origin_rpy_2) + " " + str(self.joint_origin_rpy_3)
         
         orig_tag.setAttribute("rpy", rpy)
-        xyz = str(self.joint_origin_xyz_1) + " " + str(self.joint_origin_xyz_2) + " " + str(self.joint_origin_xyz_3)
+        # Position joint at end of parent link to prevent floating/detached limbs
+        # xyz_1 is scaled by link_length to connect at link endpoint
+        # xyz_2 and xyz_3 are small offsets for variation
+        xyz_1 = self.link_length * 0.5 + self.joint_origin_xyz_1 * 0.1
+        xyz_2 = self.joint_origin_xyz_2 * 0.1
+        xyz_3 = self.joint_origin_xyz_3 * 0.1
+        xyz = str(xyz_1) + " " + str(xyz_2) + " " + str(xyz_3)
         orig_tag.setAttribute("xyz", xyz)
 
         joint_tag.appendChild(parent_tag)

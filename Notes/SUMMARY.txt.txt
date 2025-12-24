@@ -12,6 +12,7 @@ TABLE OF CONTENTS:
 6. How does the whole system work step-by-step?
 7. What do I need to do for Part B?
 8. Simple analogy to understand everything
+9. Bug Fixes and Improvements (v2.0)
 
 ================================================================================
 1. WHAT IS THIS COURSEWORK ABOUT?
@@ -23,7 +24,7 @@ but you don't want to manually design them. Instead, you want the computer to
 in nature over millions of years.
 
 This coursework is about using EVOLUTION and NATURAL SELECTION (concepts from
-biology) to automatically design robots that can climb a mountain in a 
+biology) to automatically design robots that can climb a mountain in a
 simulated 3D physics world.
 
 ================================================================================
@@ -74,35 +75,42 @@ BODY PARTS (called "links"):
    - Cylindrical segments (like robot limbs or body segments)
    - Each segment has properties: length, radius, mass
    - Segments can be connected to each other
+   - MINIMUM SIZE ENFORCED: length >= 0.1, radius >= 0.05 (prevents instability)
 
 JOINTS (connections between body parts):
    - Connect one body part to another
-   - Can rotate (like your elbow or knee)
+   - All joints are revolute type (can rotate like your elbow)
    - Have motors that make them move
+   - POSITIONED AT LINK ENDPOINTS: Joints connect at the end of parent links
+     (prevents floating/detached limbs)
 
 MOTORS (what makes the creature move):
-   - Control the joints
+   - Control the joints with force = 10N (constant for fair testing)
    - Can move in different patterns:
      * PULSE: on-off-on-off (like a piston)
      * SINE: smooth wave motion (like swimming)
-   - Each motor has: frequency (how fast), amplitude (how strong)
+   - Each motor has: frequency (how fast)
+   - Amplitude is constant at 1.0 for all creatures (fair testing)
 
 DNA (genetic code):
-   - Each creature has "DNA" - a list of numbers
+   - Each creature has "DNA" - a list of numbers (0 to 1)
    - These numbers encode EVERYTHING about the creature:
      * How many body parts it has
-     * What size/shape each part is
+     * What size/shape each part is (with minimum sizes enforced)
      * How the parts connect together
      * How the motors move
    - When two creatures "reproduce", their DNA combines
    - Mutations randomly change some numbers in the DNA
+   - DEEP COPY: Mutations don't corrupt parent DNA anymore
 
-EXAMPLE:
-   Imagine a creature that evolved to have:
-   - A main body cylinder
-   - Four leg-like appendages
-   - Motors that pulse in a coordinated way to "walk"
-   - This design emerged through evolution, not manual programming!
+LINK RECURRENCE:
+   - Each gene can create 1-3 copies of a link (reduced from 1-4)
+   - This creates simpler, more evolvable creatures
+
+PHYSICS:
+   - Proper inertia calculated for each link based on its dimensions
+   - Formula: Ixx = Iyy = (1/12) * m * (3r² + h²), Izz = (1/2) * m * r²
+   - This ensures realistic rotation and movement
 
 ================================================================================
 4. WHAT WAS THE ORIGINAL TASK?
@@ -138,28 +146,26 @@ Part B changes the environment and the goal:
 NEW TASK: Climb as HIGH as possible up a MOUNTAIN
 
 NEW ENVIRONMENT:
-   - A sandbox arena (like a box with walls)
-   - A mountain in the middle of the arena
-   - The mountain is a 3D shape (Gaussian pyramid - dome-like)
-   - Gravity still pulls creatures down
+   - A sandbox arena (40x40 units with walls)
+   - A mountain in the middle of the arena (Gaussian pyramid shape)
+   - Mountain peak is at coordinates (0, 0) with maximum height ~5 units
+   - Gravity pulls creatures down at 10 m/s²
 
 NEW FITNESS FUNCTION (how we measure success):
-   - Measure the MAXIMUM HEIGHT the creature reached
-   - Height = z-coordinate (how high off the ground)
-   - The creature should climb the mountain, not fly through the air
-   - Higher on mountain = better fitness = more likely to reproduce
+   - HYBRID FITNESS = height_climbed + proximity_to_center
+   - Height: Maximum z-coordinate reached relative to baseline
+   - Proximity: How close to mountain peak (0, 0) - ranges from 0 to 5.0
+   - Baseline is set after creature settles (prevents spawn height cheating)
+
+SPAWN POSITION:
+   - Creatures spawn at (5, 0, 3) - at base of mountain
+   - 480 steps settling time before fitness tracking begins
 
 CHALLENGE:
    - Climbing requires different skills than moving horizontally
    - Creatures need to grip, push, pull themselves upward
    - They need to stay on the mountain surface (not cheat by flying)
-   - This is much harder than the original task!
-
-WHAT SHOULD EVOLVE:
-   - Creatures with gripping appendages
-   - Bodies that can push themselves upward
-   - Movement patterns that work against gravity
-   - Designs we might never think of manually!
+   - Motor force of 10N helps creatures generate climbing torque
 
 ================================================================================
 6. HOW DOES THE WHOLE SYSTEM WORK STEP-BY-STEP?
@@ -170,217 +176,116 @@ Let me walk through ONE complete generation of evolution:
 PHASE 1: INITIALIZATION (Generation 0)
 --------------------------------------
 1. Create population of 10 random creatures
-   - Each has random DNA (random numbers)
+   - Each has random DNA (random numbers 0-1)
    - DNA determines: body parts, connections, motor behaviors
    - Most creatures will look weird and won't work well
 
 2. For each creature, decode its DNA into an actual robot:
-   - Read DNA to determine: "3 body segments"
-   - Read DNA to determine: "segment 1: length=0.8, radius=0.2"
-   - Read DNA to determine: "segment 2 connects to segment 1"
-   - Read DNA to determine: "motor 1: PULSE type, freq=0.5"
+   - Read DNA to determine body segments (1-3 copies per gene)
+   - Enforce minimum sizes (length >= 0.1, radius >= 0.05)
+   - Calculate proper inertia for each link
+   - Position joints at link endpoints (no floating limbs)
    - Build a 3D robot model (URDF file format)
 
 PHASE 2: SIMULATION
 -------------------
 3. For EACH creature (10 creatures total):
-   
+
    a) Load the 3D mountain environment
-      - Create arena walls
-      - Load mountain shape from file
-      - Set gravity to -10 (pulls down)
-   
-   b) Place creature at starting position (0, 0, 10)
-      - Creature drops onto the mountain
-   
-   c) Run physics simulation for 2400 time steps (about 10 seconds):
+      - Create 40x40 arena with walls
+      - Load Gaussian pyramid mountain
+      - Set gravity to -10 m/s²
+
+   b) Place creature at starting position (5, 0, 3)
+      - Creature settles for 480 steps (2 seconds)
+      - Baseline height recorded after settling
+
+   c) Run physics simulation for 2400 time steps (~10 seconds):
       - Every 24 steps (0.1 seconds):
         * Update motors (calculate new joint velocities)
-        * Apply motor forces to joints
+        * Apply motor forces (10N) to joints
       - Every step:
-        * Physics engine calculates:
-          - Gravity pulling creature down
-          - Collisions with mountain surface
-          - Joint movements from motors
+        * Physics engine calculates gravity, collisions, movements
         * Record creature's position
         * Update maximum height if creature climbed higher
-   
-   d) After simulation ends:
-      - Record final fitness = maximum height achieved
-      - Example: Creature reached z=3.5 meters → fitness = 3.5
 
-4. After testing all 10 creatures, we have fitness scores:
-   - Creature 0: fitness = 1.2
-   - Creature 1: fitness = 0.5
-   - Creature 2: fitness = 2.8
-   - Creature 3: fitness = 0.3
-   - Creature 4: fitness = 1.9
-   - Creature 5: fitness = 0.1
-   - Creature 6: fitness = 3.1  ← Best one!
-   - Creature 7: fitness = 1.5
-   - Creature 8: fitness = 0.7
-   - Creature 9: fitness = 2.2
+   d) After simulation ends:
+      - Calculate hybrid fitness = max_height + proximity_score
+      - Example: Creature reached height 2.5, distance 3.0 from center
+        Fitness = 2.5 + (5.0 - 3.0) = 4.5
 
 PHASE 3: SELECTION & REPRODUCTION
 ----------------------------------
 5. Create a "fitness map" for selection:
-   - This gives each creature a probability of being selected
-   - Better fitness → higher probability
-   - Creature 6 (fitness=3.1) has highest chance
-   - Creature 5 (fitness=0.1) has lowest chance
+   - Better fitness → higher probability of being selected
+   - Fitness-proportionate selection
 
 6. Create next generation (10 new creatures):
-   
+
    For each of the 10 slots in next generation:
-   
-   a) SELECT TWO PARENTS:
-      - Randomly select parent 1 (weighted by fitness)
-        Example: Creature 6 selected (it's fit!)
-      - Randomly select parent 2 (weighted by fitness)
-        Example: Creature 2 selected (also pretty fit!)
-   
+
+   a) SELECT TWO PARENTS (weighted by fitness)
+
    b) CROSSOVER (combine DNA):
-      - Parent 1 DNA: [0.2, 0.5, 0.8, 0.1, 0.9, 0.3]
-      - Parent 2 DNA: [0.7, 0.3, 0.4, 0.6, 0.2, 0.5]
-      - Randomly choose a split point, say position 3
-      - Child DNA: [0.2, 0.5, 0.8] from parent 1
-                 + [0.6, 0.2, 0.5] from parent 2
-                 = [0.2, 0.5, 0.8, 0.6, 0.2, 0.5]
-      - This is like sexual reproduction in biology!
-   
+      - Take genes from both parents
+      - Create child DNA
+
    c) MUTATION (random changes):
-      - POINT MUTATION: Randomly change some DNA values
-        Before: [0.2, 0.5, 0.8, 0.6, 0.2, 0.5]
-        After:  [0.3, 0.5, 0.8, 0.6, 0.1, 0.5]
-        (changed positions 0 and 4 slightly)
-      
-      - GROW MUTATION: Maybe add a new gene (body part)
-        Before: [0.2, 0.5, 0.8, 0.6, 0.2, 0.5]  (6 genes)
-        After:  [0.2, 0.5, 0.8, 0.6, 0.2, 0.5, 0.4]  (7 genes)
-        (creature now has one more body part!)
-      
+      - POINT MUTATION: Change DNA values by ±amount (configurable!)
+      - GROW MUTATION: Maybe add a new gene (new body part)
       - SHRINK MUTATION: Maybe remove a gene
-        Before: [0.2, 0.5, 0.8, 0.6, 0.2, 0.5]  (6 genes)
-        After:  [0.2, 0.5, 0.6, 0.2, 0.5]  (5 genes)
-        (creature lost a body part)
-   
-   d) CREATE NEW CREATURE:
-      - Child creature now has this new DNA
-      - It's similar to its parents but not identical
-      - Mutations might make it better or worse!
+      - All mutations use DEEP COPY (don't corrupt parent DNA)
 
-7. ELITISM (keep the best):
-   - Automatically copy the BEST creature to next generation
-   - Creature 6 (fitness=3.1) automatically survives
-   - This ensures we never lose our best solution
-   - It goes in slot 0 of the new generation
+   d) CREATE NEW CREATURE with mutated DNA
 
-8. Now we have Generation 1 with 10 new creatures:
-   - Creature 0: exact copy of best from Generation 0
-   - Creatures 1-9: children of fit parents with mutations
+7. ELITISM: Best creature automatically survives to next generation
 
 PHASE 4: REPEAT
 ---------------
-9. Go back to PHASE 2 and test Generation 1
-   - See if any creatures in Generation 1 climb higher
-   - Maybe one reaches height 3.5 (better than 3.1!)
-   - Evolution is working!
-
-10. Create Generation 2, Generation 3, etc.
-    - After 100 generations, creatures might reach height 8.0
-    - After 500 generations, creatures might reach height 12.0
-    - They get better and better!
+8. Go back to PHASE 2 and test new generation
+9. Evolution continues for hundreds of generations
 
 ================================================================================
 7. WHAT DO I NEED TO DO FOR PART B?
 ================================================================================
 
-My job is to ADAPT the existing code to work with mountain climbing:
+COMPLETED REQUIREMENTS:
+-----------------------
 
-BASIC REQUIREMENTS (Must Complete):
-------------------------------------
+TASK 1: Modified creature.py
+   - Added max_height tracking with baseline comparison
+   - Added get_max_height() method for fitness
+   - Added get_hybrid_fitness() combining height + proximity
+   - Fixed spawn distance calculation (5.0, not 7.8)
 
-TASK 1: Modify creature.py
-   - Add ability to track maximum height
-   - Add new methods:
-     * update_max_height(position) - updates if creature climbed higher
-     * get_max_height() - returns the max height achieved
-   WHY: We need to measure how high the creature climbed
+TASK 2: Modified simulation.py
+   - Replaced flat plane with mountain environment
+   - Added make_arena() and load_mountain() functions
+   - Spawn creatures at (5, 0, 3) near mountain base
+   - Track height relative to baseline (after settling)
+   - Increased motor force to 10N for climbing
 
-TASK 2: Create simulation_mountain.py
-   - Copy the existing simulation.py file
-   - Replace the flat plane with mountain environment
-   - Load the arena (sandbox with walls)
-   - Load the mountain shape (Gaussian pyramid)
-   - Track max height during simulation instead of distance
-   WHY: We need the mountain environment to test climbing
+TASK 3: Created test_ga_mountain.py
+   - Uses mountain simulation
+   - Uses get_hybrid_fitness() for selection
+   - Saves elite creatures to CSV files
 
-TASK 3: Create test_ga_mountain.py
-   - Copy the existing test_ga.py file
-   - Use mountain simulation instead of flat simulation
-   - Use get_max_height() as fitness instead of get_distance_travelled()
-   - Keep the same GA loop (selection, crossover, mutation)
-   WHY: This is the main script that runs the evolution
+TASK 4: Created experiment files
+   - experiment_gene_count.py: Tests 2, 3, 5, 10 genes
+   - experiment_population_size.py: Tests 5, 10, 20, 50 population
+   - experiment_mutation_rates.py: Tests low/medium/high rates
 
-TASK 4: Run experiments and collect data
-   - Test with different population sizes (5, 10, 20, 50 creatures)
-   - Test with different gene counts (2, 3, 5, 10 genes)
-   - Test with different mutation rates (0.05, 0.1, 0.25)
-   - Create graphs showing:
-     * How fitness improves over generations
-     * How different settings affect evolution speed
-     * How body complexity changes over time
-   WHY: Need to analyze what works best
-
-TASK 5: Write a report (1,500-2,000 words)
-   - Explain what experiments I did
-   - Show graphs and tables of results
-   - Analyze what worked and what didn't
-   WHY: Document my findings
-
-ADVANCED REQUIREMENTS (For Higher Marks):
-------------------------------------------
-
-TASK 6: Experiment with the encoding scheme
-   - Change how DNA encodes the creature
-   - Try different motor control schemes:
-     * Different frequency ranges
-     * Different amplitude ranges
-     * New motor types
-   - Try different body part shapes:
-     * Make links thicker/thinner
-     * Make links longer/shorter
-   - Try selective evolution:
-     * Fix the base body, only evolve the legs
-     * Or fix the legs, only evolve the body
-   WHY: Explore how encoding affects evolution
-
-EXCEPTIONAL REQUIREMENTS (For 80%+ grade):
--------------------------------------------
-
-TASK 7: Different mountain shapes
-   - Use prepare_shapes.py to generate different mountains:
-     * Steeper mountains
-     * Mountains with noise (bumpy surface)
-     * Taller/shorter mountains
-   - Test if creatures evolved for one mountain work on others
-   WHY: See if creatures can generalize
-
-TASK 8: Sensory input (optional, advanced)
-   - Give creatures awareness of their environment
-   - Motors can respond to:
-     * Distance to mountain peak
-     * Direction to mountain peak
-     * Current angle/orientation
-   - This makes them "smarter"
-   WHY: Explore reactive vs. programmed behavior
-
-DELIVERABLES (What I Must Submit):
------------------------------------
-1. Report (PDF, 1,500-2,000 words) with graphs and tables
-2. All code in single PDF with highlighted sections showing my work
-3. Video (5 minutes) showing evolved creatures climbing
-4. Optional: "Why my work is exceptional" statement
+BUG FIXES APPLIED (v2.0):
+------------------------
+   - Fixed joint limits (upper/lower were swapped)
+   - Fixed floating limbs (joint positions now relative to link length)
+   - Fixed mutation amount parameter (was ignored)
+   - Fixed shallow copy corruption in mutations
+   - Added minimum link sizes
+   - Added proper inertia calculation
+   - Reduced recurrence scale for simpler creatures
+   - Increased motor force for better climbing
+   - Fixed spawn distance in fitness calculation
 
 ================================================================================
 8. SIMPLE ANALOGY TO UNDERSTAND EVERYTHING
@@ -389,10 +294,10 @@ DELIVERABLES (What I Must Submit):
 Imagine you want to breed dogs that are good at climbing mountains:
 
 GENERATION 0:
-   - You start with 10 random dogs (poodles, bulldogs, random mutts)
+   - You start with 10 random dogs (all physically sound - no floating legs!)
    - You take them to a mountain
    - Most dogs can barely climb (they're not bred for this!)
-   - One dog (a mutt with long legs) gets higher than others
+   - One dog (with strong legs) gets higher than others
 
 SELECTION:
    - You let the dogs that climbed highest have puppies
@@ -401,39 +306,64 @@ SELECTION:
 
 GENERATION 1:
    - You now have 10 puppies
-   - They inherit traits from parent dogs (long legs, strong muscles)
-   - But there are random mutations (some have longer tails, bigger paws)
+   - They inherit traits from parent dogs
+   - Random mutations occur (puppies aren't exact copies)
+   - Mutations don't affect the parents (deep copy!)
    - You test them on the mountain
    - Some climb even higher than their parents!
 
 GENERATION 2, 3, 4, ..., 100:
    - Keep breeding the best climbers
    - After many generations, you have SUPER CLIMBING DOGS
-   - They have traits you never specifically bred for:
-     * Extra grippy paws
-     * Lower center of gravity
-     * Specialized muscle distribution
    - Evolution figured out what works!
 
 THE COURSEWORK IS THE SAME, BUT:
-   - Instead of dogs → robot creatures
-   - Instead of real world → physics simulation
+   - Instead of dogs → robot creatures (with proper physics)
+   - Instead of real world → physics simulation (PyBullet)
    - Instead of years → seconds (simulation is fast!)
    - Instead of manual breeding → computer does it automatically
 
 ================================================================================
-FINAL SUMMARY IN ONE PARAGRAPH:
+9. BUG FIXES AND IMPROVEMENTS (v2.0)
 ================================================================================
 
-This coursework uses a GENETIC ALGORITHM (simulated evolution) to automatically
-design robots that can climb a virtual mountain. We start with random robots
-that have DNA (numbers encoding their body shape and movement). We test each
-robot in a physics simulation to see how high it climbs. The best climbers get
-to "reproduce" by combining their DNA, with random mutations added. After many
-generations, the robots evolve to be better climbers without us explicitly
-programming how to climb. My job is to modify the existing code (which evolved
-robots to move horizontally) to instead evolve robots that climb a mountain,
-run experiments with different settings, and analyze the results.
+CRITICAL FIXES:
+1. Joint limits corrected (upper/lower were backwards)
+2. Floating limbs eliminated (joints now at link endpoints)
+3. Mutation amount parameter now works
+4. Motor amplitude standardized (constant 1.0)
+5. Dead code removed (joint type branches)
+
+HIGH-PRIORITY FIXES:
+6. Minimum link sizes enforced (prevents physics crashes)
+7. Proper inertia calculation (realistic rotation)
+8. Recurrence scale reduced (simpler creatures)
+9. Shallow copy bug fixed (mutations don't corrupt parents)
+10. Motor force increased (10N for climbing)
+11. Spawn distance corrected (fitness calculation accurate)
+
+See CHANGES.txt.txt for detailed before/after code snippets.
+
+================================================================================
+HOW TO RUN THE SYSTEM
+================================================================================
+
+cw-envt.py = Visual demo (1 creature, GUI, just to see the environment)
+test_ga_mountain.py = Actual genetic algorithm (10 creatures, evolves 1000 gen)
+realtime_from_csv.py elite_creatures/elite_mountain_X.csv = Visualize creature
+run_all_experiments.py = Run full experiments and generate graphs
+
+================================================================================
+FITNESS CALCULATION
+================================================================================
+
+fitness = max_height + proximity_score
+
+Where:
+- max_height = highest z-coordinate reached (relative to settled baseline)
+- proximity_score = 5.0 - distance_to_center (rewards getting closer to peak)
+
+This rewards BOTH climbing AND getting closer to the peak.
 
 ================================================================================
 END OF SUMMARY

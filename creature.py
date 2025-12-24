@@ -13,10 +13,12 @@ class Motor:
             self.motor_type = MotorType.PULSE
         else:
             self.motor_type = MotorType.SINE
-        self.amp = control_amp
+        # Amplitude is kept constant at 1.0 for fair testing across all creatures
+        # The control_amp gene is preserved in DNA structure but not applied
+        self.amp = 1.0
         self.freq = control_freq
         self.phase = 0
-    
+
 
     def get_output(self):
         self.phase = (self.phase + self.freq) % (np.pi * 2)
@@ -25,11 +27,11 @@ class Motor:
                 output = 1
             else:
                 output = -1
-            
+
         if self.motor_type == MotorType.SINE:
             output = np.sin(self.phase)
-        
-        return output 
+
+        return output * self.amp 
 
 class Creature:
     def __init__(self, gene_count):
@@ -144,12 +146,12 @@ class Creature:
         """
         Calculate distance from mountain center (0, 0).
         Used for navigation component of fitness.
-        
+
         Returns:
             float: Distance from current position to (0, 0)
         """
         if self.last_position is None:
-            return 7.8  # Starting distance from spawn point at (-7.8, 0)
+            return 5.0  # Starting distance from spawn point at (5, 0, 3)
         x, y = self.last_position[0], self.last_position[1]
         import math
         return math.sqrt(x*x + y*y)
@@ -158,12 +160,12 @@ class Creature:
         """
         Calculate proximity score (inverse of distance to center).
         Higher score = closer to mountain peak at (0, 0).
-        
+
         Returns:
-            float: Proximity score (0 to 7.8)
+            float: Proximity score (0 to 5.0)
         """
         distance = self.get_distance_to_center()
-        return max(0, 7.8 - distance)
+        return max(0, 5.0 - distance)
     
     def get_hybrid_fitness(self):
         """
