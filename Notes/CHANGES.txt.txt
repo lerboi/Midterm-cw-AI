@@ -188,8 +188,63 @@ After these fixes, you should observe:
 2. More stable physics simulation
 3. Simpler creature structures (fewer runaway link expansions)
 4. Proper mutation behavior (tunable via amount parameter)
-5. Better climbing ability due to increased motor force
-6. Accurate fitness calculations based on actual spawn position
+5. Accurate fitness calculations based on actual spawn position
+
+================================================================================
+VERSION 2.1 - Additional Changes
+================================================================================
+
+Date: 2024-12-24
+
+12. SPAWN POSITION CHANGED TO GENTLER SLOPE (simulation.py, realtime_from_csv.py)
+    -------------------------------------------------------------------------
+    Problem: Spawn at (5, 0, 3) was on steep slope, difficult for creatures
+    Impact:  Creatures couldn't climb effectively
+
+    Before:
+        p.resetBasePositionAndOrientation(cid, [5, 0, 3], ...)
+
+    After:
+        p.resetBasePositionAndOrientation(cid, [-5, 0, 3], ...)
+        # Spawns on gentler slope side of mountain
+
+13. MOTOR FORCE REVERTED TO 5 (simulation.py)
+    -------------------------------------------------------------------------
+    Change: Motor force kept at original value for fair testing
+
+    Before:
+        force=10
+
+    After:
+        force=5
+
+14. FIXED FILE PATHS IN create_graphs.py (experiments/create_graphs.py)
+    -------------------------------------------------------------------------
+    Problem: Used absolute paths "/results/" instead of relative "../results/"
+    Impact:  Graph generation would fail to find result files
+
+    Before:
+        csv_file = f"/results/pop_size_{size}.csv"
+
+    After:
+        csv_file = f"../results/pop_size_{size}.csv"
+
+================================================================================
+FINAL FILE SUMMARY
+================================================================================
+
+simulation.py:
+  - Line 36: Spawn position changed to [-5, 0, 3] (gentler slope)
+  - Line 66: Motor force = 5 (constant for fair testing)
+
+creature.py:
+  - Line 154: Updated comment to reflect spawn at (-5, 0, 3)
+
+realtime_from_csv.py:
+  - Line 45: Spawn position changed to [-5, 0, 3]
+
+experiments/create_graphs.py:
+  - Fixed all file paths from "/results/" to "../results/"
 
 ================================================================================
 END OF CHANGELOG

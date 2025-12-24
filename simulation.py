@@ -32,8 +32,8 @@ class Simulation:
         
         cid = p.loadURDF(xml_file, physicsClientId=pid)
 
-        # Spawn creature at base of mountain (not dropped from height)
-        p.resetBasePositionAndOrientation(cid, [5, 0, 3], [0, 0, 0, 1], physicsClientId=pid)
+        # Spawn creature at base of mountain on gentler slope side
+        p.resetBasePositionAndOrientation(cid, [-5, 0, 3], [0, 0, 0, 1], physicsClientId=pid)
 
        # Phase 1: Brief settling period (480 steps = 0.5 seconds)
         for step in range(480):
@@ -63,7 +63,7 @@ class Simulation:
             p.setJointMotorControl2(cid, jid,
                     controlMode=p.VELOCITY_CONTROL,
                     targetVelocity=m.get_output(),
-                    force=10,  # Increased from 5 for better climbing ability
+                    force=5,
                     physicsClientId=self.physicsClientId)
         
 

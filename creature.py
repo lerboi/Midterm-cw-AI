@@ -151,7 +151,7 @@ class Creature:
             float: Distance from current position to (0, 0)
         """
         if self.last_position is None:
-            return 5.0  # Starting distance from spawn point at (5, 0, 3)
+            return 5.0  # Starting distance from spawn point at (-5, 0, 3)
         x, y = self.last_position[0], self.last_position[1]
         import math
         return math.sqrt(x*x + y*y)

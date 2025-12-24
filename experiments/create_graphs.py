@@ -97,14 +97,14 @@ def main():
     
     # POPULATION SIZE EXPERIMENTS
     print("Processing Population Size Experiments...")
-    
+
     pop_sizes = [5, 10, 20, 50]
-    pop_csv_files = [f"/results/pop_size_{size}.csv" for size in pop_sizes]
+    pop_csv_files = [f"../results/pop_size_{size}.csv" for size in pop_sizes]
     pop_labels = [f"Pop Size {size}" for size in pop_sizes]
-    
+
     # Individual plots
     for size in pop_sizes:
-        csv_file = f"/results/pop_size_{size}.csv"
+        csv_file = f"../results/pop_size_{size}.csv"
         if os.path.exists(csv_file):
             plot_single_experiment(
                 csv_file,
@@ -114,14 +114,14 @@ def main():
 
     # GENE COUNT EXPERIMENTS
     print("\nProcessing Gene Count Experiments...")
-    
+
     gene_counts = [2, 3, 5, 10]
-    gene_csv_files = [f"/results/gene_count_{count}.csv" for count in gene_counts]
+    gene_csv_files = [f"../results/gene_count_{count}.csv" for count in gene_counts]
     gene_labels = [f"{count} Genes" for count in gene_counts]
-    
+
     # Individual plots
     for count in gene_counts:
-        csv_file = f"/results/gene_count_{count}.csv"
+        csv_file = f"../results/gene_count_{count}.csv"
         if os.path.exists(csv_file):
             plot_single_experiment(
                 csv_file,
@@ -131,27 +131,27 @@ def main():
 
     # MUTATION RATE EXPERIMENTS
     print("\nProcessing Mutation Rate Experiments...")
-    
+
     mutation_configs = [
         (0.05, 0.1, 0.05),   # Low
         (0.1, 0.25, 0.1),    # Medium
         (0.25, 0.5, 0.25),   # High
     ]
-    
+
     mutation_csv_files = [
-        f"/results/mutation_point_{p}_shrink_{s}_grow_{g}.csv"
+        f"../results/mutation_point_{p}_shrink_{s}_grow_{g}.csv"
         for p, s, g in mutation_configs
     ]
-    
+
     mutation_labels = [
         f"Low (p={p}, s={s}, g={g})",
         f"Medium (p={p}, s={s}, g={g})",
         f"High (p={p}, s={s}, g={g})",
     ]
-    
+
     # Individual plots
     for (p, s, g), label in zip(mutation_configs, mutation_labels):
-        csv_file = f"/results/mutation_point_{p}_shrink_{s}_grow_{g}.csv"
+        csv_file = f"../results/mutation_point_{p}_shrink_{s}_grow_{g}.csv"
         if os.path.exists(csv_file):
             plot_single_experiment(
                 csv_file,
