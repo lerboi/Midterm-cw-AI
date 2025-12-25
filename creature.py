@@ -52,8 +52,8 @@ class Creature:
         self.grounded_height_sum = 0  # Sum of heights when grounded
         self.grounded_steps = 0  # Number of steps creature was grounded
         self.is_grounded = False  # Current ground contact state
-        self.initial_distance_to_peak = 3.0  # Starting distance from (-3, 0) to (0, 0)
-        self.final_distance_to_peak = 3.0  # Final distance to peak
+        self.initial_distance_to_peak = 5.0  # Starting distance from (5, 0) to (0, 0)
+        self.final_distance_to_peak = 5.0  # Final distance to peak
 
     def get_flat_links(self):
         if self.flat_links == None:
@@ -129,8 +129,8 @@ class Creature:
         self.grounded_height_sum = 0
         self.grounded_steps = 0
         self.is_grounded = False
-        self.initial_distance_to_peak = 3.0
-        self.final_distance_to_peak = 3.0
+        self.initial_distance_to_peak = 5.0
+        self.final_distance_to_peak = 5.0
 
     # update max height climbed by creatures to determine fitness score. args: (x, y, z) position
     def update_max_height(self, pos):

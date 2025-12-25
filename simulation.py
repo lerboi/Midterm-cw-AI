@@ -32,11 +32,11 @@ class Simulation:
 
         cid = p.loadURDF(xml_file, physicsClientId=pid)
 
-        # Spawn creature at base of mountain on gentler slope side (closer to peak)
-        p.resetBasePositionAndOrientation(cid, [-3, 0, 2], [0, 0, 0, 1], physicsClientId=pid)
+        # Spawn creature at base of mountain
+        p.resetBasePositionAndOrientation(cid, [5, 0, 3], [0, 0, 0, 1], physicsClientId=pid)
 
         # Store initial distance to peak for progress tracking
-        cr.initial_distance_to_peak = 3.0  # Distance from (-3, 0) to (0, 0)
+        cr.initial_distance_to_peak = 5.0  # Distance from (5, 0) to (0, 0)
 
         # Phase 1: Brief settling period (480 steps = 0.5 seconds)
         for step in range(480):
