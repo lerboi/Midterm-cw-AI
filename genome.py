@@ -31,7 +31,7 @@ class Genome():
             "joint-origin-xyz-3":{"scale":1},
             "control-waveform":{"scale":1},
             "control-amp":{"scale":0.25},
-            "control-freq":{"scale":1}
+            "control-freq":{"scale":3}
             }
         ind = 0
         for key in gene_spec.keys():
@@ -336,10 +336,10 @@ class URDFLink:
         
         limit_tag = adom.createElement("limit")
         # effort upper lower velocity
-        limit_tag.setAttribute("effort", "1")
+        limit_tag.setAttribute("effort", "10")
         limit_tag.setAttribute("upper", "3.1415")
         limit_tag.setAttribute("lower", "-3.1415")
-        limit_tag.setAttribute("velocity", "1")
+        limit_tag.setAttribute("velocity", "5")
         # <origin rpy="0 0 0" xyz="0 0.5 0"/>
         orig_tag = adom.createElement("origin")
         

@@ -193,3 +193,52 @@ After:  Creatures should evolve locomotion because:
         3. Moving toward peak gives 2.5x progress reward
         4. Higher motor force enables actual locomotion
         5. True lowest point tracking prevents tall-limb exploitation
+
+================================================================================
+8. JOINT LIMITS - INCREASED FOR LOCOMOTION (genome.py)
+================================================================================
+
+PROBLEM: After 1000+ generations, creatures still could not climb. The URDF
+         joint limits were acting as a physical bottleneck:
+         - Joint effort limit = 1 Nm (motor applies 12, but joint caps at 1)
+         - Joint velocity limit = 1 rad/s (too slow for locomotion)
+
+         The motor force (12) was being wasted because the joint itself could
+         only transmit 1 Nm of torque. This is like having a powerful engine
+         connected to a weak transmission.
+
+CHANGES:
+| Parameter       | Old Value | New Value | Reason                              |
+|-----------------|-----------|-----------|-------------------------------------|
+| Joint effort    | 1 Nm      | 10 Nm     | Allow motor force to transfer       |
+| Joint velocity  | 1 rad/s   | 5 rad/s   | Enable faster joint movement        |
+
+CODE (genome.py, to_joint_element method):
+    limit_tag.setAttribute("effort", "10")    # Was "1"
+    limit_tag.setAttribute("velocity", "5")   # Was "1"
+
+WHY: The PDF allows modifications to "motor controls" and "shape of the parts
+     of the robot". Joint limits define how the robot's parts can move, which
+     falls under allowable modifications. Without this change, creatures
+     physically CANNOT generate sufficient torque or speed for climbing.
+
+================================================================================
+9. MOTOR FREQUENCY SCALE - INCREASED FOR FASTER OSCILLATION (genome.py)
+================================================================================
+
+PROBLEM: The control-freq gene had a scale of 1, meaning motor oscillation
+         frequency ranged from 0-1 Hz. This is too slow for effective
+         locomotion - creatures need faster oscillating movements to crawl
+         or walk up the mountain.
+
+CHANGES:
+| Parameter        | Old Value | New Value | Reason                            |
+|------------------|-----------|-----------|-----------------------------------|
+| control-freq     | scale: 1  | scale: 3  | Allow 0-3 Hz motor oscillation    |
+
+CODE (genome.py, get_gene_spec method):
+    "control-freq":{"scale":3}  # Was {"scale":1}
+
+WHY: Higher frequency oscillation enables faster leg/limb movements. Combined
+     with the increased joint velocity limit (5 rad/s), creatures can now
+     evolve gaits with faster stepping patterns needed for climbing.
