@@ -49,18 +49,25 @@ class Simulation:
             if step % 24 == 0:
                 self.update_motors(cid=cid, cr=cr)
 
-            pos, orn = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
-            cr.update_position(pos)
-            cr.update_max_height(pos)  # Track height relative to baseline (pure climbing)
+            # Get base position for horizontal tracking (x, y)
+            base_pos, orn = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
+            cr.update_position(base_pos)
 
-            # NEW: Check ground contact with mountain or floor
-            # This implements Fix 2: Ground contact requirement
+            # Get LOWEST point of creature using AABB (prevents tall creatures from cheating)
+            # This measures from the bottom of the creature, not the center
+            lowest_z = self.get_lowest_point(cid, pid)
+            lowest_pos = (base_pos[0], base_pos[1], lowest_z)
+            cr.update_max_height(lowest_pos)  # Track height of lowest point
+
+            # Check ground contact with mountain or floor
             is_grounded = self.check_ground_contact(cid, mountain_id, floor_id, pid)
             cr.update_grounded_state(is_grounded)
-            cr.update_grounded_height(pos)  # Only counts when grounded
+            cr.update_grounded_height(lowest_pos)  # Only counts when grounded
 
-        # NEW: Store final position for fitness calculation (Fix 1: Final vs Max)
-        final_pos, _ = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
+        # Store final position using lowest point for fitness calculation
+        base_pos, _ = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
+        lowest_z = self.get_lowest_point(cid, pid)
+        final_pos = (base_pos[0], base_pos[1], lowest_z)
         cr.update_final_position(final_pos)
 
     def check_ground_contact(self, creature_id, mountain_id, floor_id, pid):
@@ -84,8 +91,19 @@ class Simulation:
             return True
 
         return False
-        
-    
+
+    def get_lowest_point(self, creature_id, pid):
+        """
+        Get the lowest Z coordinate of the creature using AABB.
+        This prevents tall creatures from gaming the fitness by measuring
+        from their center instead of their actual ground contact point.
+
+        Returns:
+            float: Lowest Z coordinate of the creature's bounding box
+        """
+        aabb_min, aabb_max = p.getAABB(creature_id, physicsClientId=pid)
+        return aabb_min[2]
+
     def update_motors(self, cid, cr):
         """
         cid is the id in the physics engine

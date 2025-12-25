@@ -21,7 +21,7 @@ class TestGA(unittest.TestCase):
                     for cr in pop.creatures]
             links = [len(cr.get_expanded_links()) 
                     for cr in pop.creatures]
-            print(iteration, "max height:", np.round(np.max(fits), 3), 
+            print(iteration, "max fitness:", np.round(np.max(fits), 3),
                   "mean:", np.round(np.mean(fits), 3), "mean links", np.round(np.mean(links)), "max links", np.round(np.max(links)))       
             
             # selection and reproduction

@@ -21,15 +21,15 @@ def main(csv_file):
     
     # Import arena and mountain functions from simulation
     from simulation import make_arena, load_mountain
-    make_arena(arena_size=arena_size, wall_height=1, physicsClientId=pid)
-    
+    floor_id = make_arena(arena_size=arena_size, wall_height=1, physicsClientId=pid)
+
     # Set search path for mountain URDF files
     p.setAdditionalSearchPath('shapes/', physicsClientId=pid)
-    
+
     # Load mountain
     mountain_position = (0, 0, -1)
     mountain_orientation = p.getQuaternionFromEuler((0, 0, 0))
-    load_mountain("gaussian_pyramid.urdf", mountain_position, mountain_orientation, physicsClientId=pid)
+    mountain_id = load_mountain("gaussian_pyramid.urdf", mountain_position, mountain_orientation, physicsClientId=pid)
 
     # generate a random creature
     cr = creature.Creature(gene_count=1)
@@ -41,23 +41,37 @@ def main(csv_file):
     # load it into the sim
     rob1 = p.loadURDF('test.urdf', physicsClientId=pid)
     
-    # Spawn at base of mountain on gentler slope side (closer to peak)
-    p.resetBasePositionAndOrientation(rob1, [-3, 0, 2], [0, 0, 0, 1], physicsClientId=pid)
-    
+    # Spawn at base of mountain (same as training in simulation.py)
+    p.resetBasePositionAndOrientation(rob1, [5, 0, 3], [0, 0, 0, 1], physicsClientId=pid)
+
+    # Store initial distance to peak for progress tracking
+    cr.initial_distance_to_peak = 5.0  # Distance from (5, 0) to (0, 0)
+
     # Brief settling period
     for i in range(480):
         p.stepSimulation(physicsClientId=pid)
-    
-    start_pos, orn = p.getBasePositionAndOrientation(rob1, physicsClientId=pid)
 
-    # iterate 
+    # Helper function for ground contact (same as simulation.py)
+    def check_ground_contact(creature_id, mountain_id, floor_id, pid):
+        mountain_contacts = p.getContactPoints(creature_id, mountain_id, physicsClientId=pid)
+        if mountain_contacts and len(mountain_contacts) > 0:
+            return True
+        floor_contacts = p.getContactPoints(creature_id, floor_id, physicsClientId=pid)
+        if floor_contacts and len(floor_contacts) > 0:
+            return True
+        return False
+
+    # Helper function to get lowest point of creature (same as simulation.py)
+    def get_lowest_point(creature_id, pid):
+        aabb_min, aabb_max = p.getAABB(creature_id, physicsClientId=pid)
+        return aabb_min[2]
+
+    # iterate
     elapsed_time = 0
     wait_time = 1.0/240 # seconds
     total_time = 30 # seconds
     step = 0
-    max_height = 0
-    baseline_height = None
-    
+
     while True:
         p.stepSimulation(physicsClientId=pid)
         step += 1
@@ -67,30 +81,42 @@ def main(csv_file):
             for jid in range(p.getNumJoints(rob1, physicsClientId=pid)):
                 mode = p.VELOCITY_CONTROL
                 vel = motors[jid].get_output()
-                p.setJointMotorControl2(rob1, 
-                            jid,  
-                            controlMode=mode, 
+                p.setJointMotorControl2(rob1,
+                            jid,
+                            controlMode=mode,
                             targetVelocity=vel,
                             physicsClientId=pid)
-            new_pos, orn = p.getBasePositionAndOrientation(rob1, physicsClientId=pid)
-            
-            # Track height relative to baseline (same as training)
-            if baseline_height is None:
-                baseline_height = new_pos[2]
-                max_height = 0
-            else:
-                relative_height = new_pos[2] - baseline_height
-                if relative_height > max_height:
-                    max_height = relative_height
-            
-            print(f"Current Z: {new_pos[2]:.3f}, Baseline: {baseline_height:.3f}, Climb: {max_height:.3f}")
-        
+
+            # Track using creature's methods (same as training)
+            base_pos, orn = p.getBasePositionAndOrientation(rob1, physicsClientId=pid)
+            cr.update_position(base_pos)
+
+            # Get LOWEST point of creature using AABB (prevents tall creatures from cheating)
+            lowest_z = get_lowest_point(rob1, pid)
+            lowest_pos = (base_pos[0], base_pos[1], lowest_z)
+            cr.update_max_height(lowest_pos)
+
+            # Check ground contact
+            is_grounded = check_ground_contact(rob1, mountain_id, floor_id, pid)
+            cr.update_grounded_state(is_grounded)
+            cr.update_grounded_height(lowest_pos)
+
+            # Display current stats
+            fitness = cr.get_climbing_fitness()
+            print(f"Lowest Z: {lowest_z:.2f}, Base Z: {base_pos[2]:.2f}, Grounded: {is_grounded}, Fitness: {fitness:.3f}")
+
         time.sleep(wait_time)
         elapsed_time += wait_time
         if elapsed_time > total_time:
             break
 
-    print(f"\nFINAL MAX HEIGHT REACHED: {max_height:.3f}")
+    # Store final position using lowest point
+    base_pos, _ = p.getBasePositionAndOrientation(rob1, physicsClientId=pid)
+    lowest_z = get_lowest_point(rob1, pid)
+    final_pos = (base_pos[0], base_pos[1], lowest_z)
+    cr.update_final_position(final_pos)
+
+    print(f"\nFINAL CLIMBING FITNESS: {cr.get_climbing_fitness():.3f}")
 
 
 
