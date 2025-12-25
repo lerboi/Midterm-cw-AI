@@ -21,8 +21,8 @@ class TestGA(unittest.TestCase):
 
         for iteration in range(1000):
             sim.eval_population(pop, 2400)
-            # Use hybrid fitness (height + proximity) for mountain climbing
-            fits = [cr.get_hybrid_fitness()
+            # Use climbing fitness (final position, ground contact, progress)
+            fits = [cr.get_climbing_fitness()
                     for cr in pop.creatures]
             links = [len(cr.get_expanded_links())
                     for cr in pop.creatures]
@@ -46,7 +46,7 @@ class TestGA(unittest.TestCase):
             # elitism - keep the best creature
             max_fit = np.max(fits)
             for cr in pop.creatures:
-                if cr.get_hybrid_fitness() == max_fit:
+                if cr.get_climbing_fitness() == max_fit:
                     new_cr = creature.Creature(1)
                     new_cr.update_dna(cr.dna)
                     new_creatures[0] = new_cr

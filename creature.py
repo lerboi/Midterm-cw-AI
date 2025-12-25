@@ -1,7 +1,8 @@
-import genome 
+import genome
 from xml.dom.minidom import getDOMImplementation
 from enum import Enum
 import numpy as np
+import math
 
 class MotorType(Enum):
     PULSE = 1
@@ -31,7 +32,7 @@ class Motor:
         if self.motor_type == MotorType.SINE:
             output = np.sin(self.phase)
 
-        return output * self.amp 
+        return output * self.amp
 
 class Creature:
     def __init__(self, gene_count):
@@ -43,8 +44,16 @@ class Creature:
         self.start_position = None
         self.last_position = None
 
-        self.max_height = 0 # max height 
+        self.max_height = 0 # max height
         self.baseline_height = None
+
+        # NEW: Enhanced tracking for improved fitness (PDF Part B requirements)
+        self.final_position = None  # Track final position instead of max
+        self.grounded_height_sum = 0  # Sum of heights when grounded
+        self.grounded_steps = 0  # Number of steps creature was grounded
+        self.is_grounded = False  # Current ground contact state
+        self.initial_distance_to_peak = 3.0  # Starting distance from (-3, 0) to (0, 0)
+        self.final_distance_to_peak = 3.0  # Final distance to peak
 
     def get_flat_links(self):
         if self.flat_links == None:
@@ -115,6 +124,13 @@ class Creature:
         self.last_position = None
         self.max_height = 0
         self.baseline_height = None
+        # Reset new tracking variables
+        self.final_position = None
+        self.grounded_height_sum = 0
+        self.grounded_steps = 0
+        self.is_grounded = False
+        self.initial_distance_to_peak = 3.0
+        self.final_distance_to_peak = 3.0
 
     # update max height climbed by creatures to determine fitness score. args: (x, y, z) position
     def update_max_height(self, pos):
@@ -171,15 +187,169 @@ class Creature:
         """
         Calculate hybrid fitness combining climbing + navigation.
         Fitness = height_climbed + proximity_to_center
-        
+
         Returns:
             float: Combined fitness score
         """
         # Component 1: Height climbed (vertical progress)
         height_component = self.max_height
-        
+
         # Component 2: Proximity to center (horizontal progress)
         proximity_component = self.get_proximity_score()
-        
+
         # Combined fitness with equal weight (1.0)
         return height_component + (proximity_component * 1.0)
+
+    # =========================================================================
+    # NEW FITNESS METHODS - Addressing PDF Part B requirements:
+    # "get as high as possible up the mountain, without cheating and flying"
+    # =========================================================================
+
+    @staticmethod
+    def get_mountain_height(x, y):
+        """
+        Calculate the mountain surface height at position (x, y).
+        Uses the same Gaussian formula as prepare_shapes.py.
+        Mountain is positioned at z=-1, with sigma=3, height=5.
+
+        Returns:
+            float: Height of mountain surface at (x, y)
+        """
+        sigma = 3.0
+        height = 5.0
+        mountain_base = -1.0
+        # Gaussian: height * exp(-(x² + y²) / (2 * sigma²))
+        surface_height = height * math.exp(-((x**2 + y**2) / (2 * sigma**2)))
+        return surface_height + mountain_base
+
+    def update_grounded_state(self, is_grounded):
+        """
+        Update whether creature is in contact with ground/mountain.
+        Called by simulation when ground contact is detected.
+
+        Args:
+            is_grounded: Boolean indicating ground contact
+        """
+        self.is_grounded = is_grounded
+
+    def update_final_position(self, pos):
+        """
+        Update final position (called at end of simulation).
+        This is used for FINAL position fitness instead of MAX position.
+
+        Args:
+            pos: (x, y, z) tuple of final position
+        """
+        if pos is not None and len(pos) >= 3:
+            self.final_position = pos
+            self.final_distance_to_peak = math.sqrt(pos[0]**2 + pos[1]**2)
+
+    def update_grounded_height(self, pos):
+        """
+        Track height only when creature is grounded.
+        Prevents "flying" or "jumping" from being rewarded.
+
+        Args:
+            pos: (x, y, z) position tuple
+        """
+        if pos is not None and len(pos) >= 3 and self.is_grounded:
+            self.grounded_height_sum += pos[2]
+            self.grounded_steps += 1
+
+    def get_final_height(self):
+        """
+        Get the FINAL height of the creature (not max).
+        Rewards sustainable climbing, not brief spikes.
+
+        Returns:
+            float: Final z-coordinate relative to baseline
+        """
+        if self.final_position is None or self.baseline_height is None:
+            return 0
+        return self.final_position[2] - self.baseline_height
+
+    def get_height_above_surface(self):
+        """
+        Calculate creature's height above the mountain surface.
+        Prevents tall stationary creatures from scoring high.
+
+        Returns:
+            float: Height above the mountain surface at current position
+        """
+        if self.final_position is None:
+            return 0
+        x, y, z = self.final_position
+        surface_z = self.get_mountain_height(x, y)
+        return z - surface_z
+
+    def get_average_grounded_height(self):
+        """
+        Get average height while grounded.
+        Only counts time when creature was touching the surface.
+
+        Returns:
+            float: Average height while in contact with ground
+        """
+        if self.grounded_steps == 0:
+            return 0
+        return (self.grounded_height_sum / self.grounded_steps) - (self.baseline_height or 0)
+
+    def get_progress_toward_peak(self):
+        """
+        Calculate how much closer the creature moved toward the peak.
+        Rewards actual locomotion toward (0, 0).
+
+        Returns:
+            float: Progress score (positive = moved toward peak)
+        """
+        # Progress = initial_distance - final_distance
+        # Positive means creature moved closer to peak
+        return self.initial_distance_to_peak - self.final_distance_to_peak
+
+    def get_climbing_fitness(self):
+        """
+        NEW FITNESS FUNCTION - Designed to reward actual climbing behavior.
+
+        Addresses PDF Part B requirement: "get as high as possible up the
+        mountain, without cheating and flying into the air"
+
+        Components:
+        1. Final height (not max) - rewards sustainable position
+        2. Height above surface - ensures creature is ON the mountain
+        3. Progress toward peak - rewards moving toward (0,0)
+        4. Grounding bonus - rewards staying in contact with surface
+
+        Returns:
+            float: Combined climbing fitness score
+        """
+        # Component 1: FINAL height relative to baseline (not max)
+        # This prevents brief spikes from jumping/falling from being rewarded
+        final_height = self.get_final_height()
+
+        # Component 2: Height above mountain surface
+        # Small values = creature is ON the surface (good for climbing)
+        # Large values = creature is floating/flying (bad)
+        height_above_surface = self.get_height_above_surface()
+
+        # Penalize if creature is too high above surface (likely not climbing)
+        # Ideal: creature is within 0.5 units of surface
+        surface_penalty = max(0, height_above_surface - 0.5) * 0.5
+
+        # Component 3: Progress toward peak
+        # Rewards creatures that moved closer to (0, 0)
+        progress = self.get_progress_toward_peak()
+
+        # Component 4: Grounding bonus
+        # Rewards creatures that stayed in contact with surface
+        grounding_ratio = self.grounded_steps / max(1, 1920)  # ~1920 tracking steps
+        grounding_bonus = grounding_ratio * 0.5
+
+        # Combined fitness:
+        # - Final height (main reward for climbing)
+        # - Progress toward peak (reward for moving to center)
+        # - Grounding bonus (reward for staying on surface)
+        # - Surface penalty (penalize floating/flying)
+        fitness = final_height + (progress * 1.0) + grounding_bonus - surface_penalty
+
+        # Ensure non-negative fitness
+        return max(0, fitness)

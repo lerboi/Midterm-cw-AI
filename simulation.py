@@ -12,34 +12,37 @@ class Simulation:
         p.setPhysicsEngineParameter(enableFileCaching=0, physicsClientId=pid)
 
         p.setGravity(0, 0, -10, physicsClientId=pid)
-        
+
         # Create arena and mountain environment instead of flat plane
         arena_size = 40
-        make_arena(arena_size=arena_size, wall_height=1, physicsClientId=pid)
-        
+        floor_id = make_arena(arena_size=arena_size, wall_height=1, physicsClientId=pid)
+
         # Set search path for mountain URDF files
         p.setAdditionalSearchPath('shapes/', physicsClientId=pid)
-        
+
         # Load mountain
         mountain_position = (0, 0, -1)
         mountain_orientation = p.getQuaternionFromEuler((0, 0, 0))
-        load_mountain("gaussian_pyramid.urdf", mountain_position, mountain_orientation, physicsClientId=pid)
+        mountain_id = load_mountain("gaussian_pyramid.urdf", mountain_position, mountain_orientation, physicsClientId=pid)
 
         xml_file = 'temp' + str(self.sim_id) + '.urdf'
         xml_str = cr.to_xml()
         with open(xml_file, 'w') as f:
             f.write(xml_str)
-        
+
         cid = p.loadURDF(xml_file, physicsClientId=pid)
 
         # Spawn creature at base of mountain on gentler slope side (closer to peak)
         p.resetBasePositionAndOrientation(cid, [-3, 0, 2], [0, 0, 0, 1], physicsClientId=pid)
 
-       # Phase 1: Brief settling period (480 steps = 0.5 seconds)
+        # Store initial distance to peak for progress tracking
+        cr.initial_distance_to_peak = 3.0  # Distance from (-3, 0) to (0, 0)
+
+        # Phase 1: Brief settling period (480 steps = 0.5 seconds)
         for step in range(480):
             p.stepSimulation(physicsClientId=pid)
-        
-        # Phase 2: Main simulation with height tracking
+
+        # Phase 2: Main simulation with enhanced tracking
         # First call to update_max_height will set baseline to settled position
         for step in range(480, iterations):
             p.stepSimulation(physicsClientId=pid)
@@ -49,6 +52,38 @@ class Simulation:
             pos, orn = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
             cr.update_position(pos)
             cr.update_max_height(pos)  # Track height relative to baseline (pure climbing)
+
+            # NEW: Check ground contact with mountain or floor
+            # This implements Fix 2: Ground contact requirement
+            is_grounded = self.check_ground_contact(cid, mountain_id, floor_id, pid)
+            cr.update_grounded_state(is_grounded)
+            cr.update_grounded_height(pos)  # Only counts when grounded
+
+        # NEW: Store final position for fitness calculation (Fix 1: Final vs Max)
+        final_pos, _ = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
+        cr.update_final_position(final_pos)
+
+    def check_ground_contact(self, creature_id, mountain_id, floor_id, pid):
+        """
+        Check if the creature is in contact with the mountain or floor.
+        Uses PyBullet's getContactPoints to detect collisions.
+
+        This implements the PDF requirement: "without cheating and flying into the air"
+
+        Returns:
+            bool: True if creature has contact with ground/mountain
+        """
+        # Check contact with mountain
+        mountain_contacts = p.getContactPoints(creature_id, mountain_id, physicsClientId=pid)
+        if mountain_contacts and len(mountain_contacts) > 0:
+            return True
+
+        # Check contact with floor
+        floor_contacts = p.getContactPoints(creature_id, floor_id, physicsClientId=pid)
+        if floor_contacts and len(floor_contacts) > 0:
+            return True
+
+        return False
         
     
     def update_motors(self, cid, cr):
