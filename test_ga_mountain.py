@@ -8,7 +8,7 @@ import numpy as np
 class TestGA(unittest.TestCase):
     def testBasicGA(self):
         pop = population.Population(pop_size=15,
-                                    gene_count=4)
+                                    gene_count=6)
         sim = simulation.Simulation()
 
         for iteration in range(1000):

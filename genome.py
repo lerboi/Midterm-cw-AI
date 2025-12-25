@@ -86,11 +86,12 @@ class Genome():
             parent_name = parent_names[int(parent_ind)]
             #print("available parents: ", parent_names, "chose", parent_name)
             recur = int(gdict["link-recurrence"]) + 1
-            link = URDFLink(name=link_name, 
-                            parent_name=parent_name, 
-                            recur=recur, 
-                            link_length=gdict["link-length"], 
-                            link_radius=gdict["link-radius"], 
+            link = URDFLink(name=link_name,
+                            parent_name=parent_name,
+                            recur=recur,
+                            link_shape=gdict["link-shape"],
+                            link_length=gdict["link-length"],
+                            link_radius=gdict["link-radius"],
                             link_mass=gdict["link-mass"],
                             joint_type=gdict["joint-type"],
                             joint_parent=gdict["joint-parent"],
@@ -195,6 +196,7 @@ class Genome():
 
 class URDFLink:
     def __init__(self, name, parent_name, recur,
+                link_shape=0.1,
                 link_length=0.1,
                 link_radius=0.1,
                 link_mass=0.1,
@@ -213,6 +215,7 @@ class URDFLink:
         self.name = name
         self.parent_name = parent_name
         self.recur = recur
+        self.link_shape = link_shape
         self.link_length=link_length
         self.link_radius=link_radius
         self.link_mass=link_mass
@@ -261,21 +264,53 @@ class URDFLink:
         link_tag.setAttribute("name", self.name)
         vis_tag = adom.createElement("visual")
         geom_tag = adom.createElement("geometry")
-        cyl_tag = adom.createElement("cylinder")
-        cyl_tag.setAttribute("length", str(actual_length))
-        cyl_tag.setAttribute("radius", str(actual_radius))
 
-        geom_tag.appendChild(cyl_tag)
+        # Determine shape based on link_shape gene value (0-1 range)
+        # 0.0 - 0.33: cylinder, 0.33 - 0.66: sphere, 0.66 - 1.0: box
+        if self.link_shape <= 0.33:
+            # Cylinder shape
+            shape_tag = adom.createElement("cylinder")
+            shape_tag.setAttribute("length", str(actual_length))
+            shape_tag.setAttribute("radius", str(actual_radius))
+            # Mass = density * volume = pi * r^2 * height
+            mass = np.pi * (actual_radius * actual_radius) * actual_length
+        elif self.link_shape <= 0.66:
+            # Sphere shape - use radius based on average of length and radius
+            sphere_radius = (actual_length + actual_radius) / 2
+            shape_tag = adom.createElement("sphere")
+            shape_tag.setAttribute("radius", str(sphere_radius))
+            # Mass = density * volume = (4/3) * pi * r^3
+            mass = (4.0/3.0) * np.pi * (sphere_radius ** 3)
+        else:
+            # Box shape - use length and radius to define box dimensions
+            shape_tag = adom.createElement("box")
+            # Box size: width=2*radius, depth=2*radius, height=length
+            box_size = str(actual_radius*2) + " " + str(actual_radius*2) + " " + str(actual_length)
+            shape_tag.setAttribute("size", box_size)
+            # Mass = density * volume = width * depth * height
+            mass = (actual_radius * 2) * (actual_radius * 2) * actual_length
+
+        geom_tag.appendChild(shape_tag)
         vis_tag.appendChild(geom_tag)
-
 
         coll_tag = adom.createElement("collision")
         c_geom_tag = adom.createElement("geometry")
-        c_cyl_tag = adom.createElement("cylinder")
-        c_cyl_tag.setAttribute("length", str(actual_length))
-        c_cyl_tag.setAttribute("radius", str(actual_radius))
 
-        c_geom_tag.appendChild(c_cyl_tag)
+        # Create collision shape (same as visual)
+        if self.link_shape <= 0.33:
+            c_shape_tag = adom.createElement("cylinder")
+            c_shape_tag.setAttribute("length", str(actual_length))
+            c_shape_tag.setAttribute("radius", str(actual_radius))
+        elif self.link_shape <= 0.66:
+            sphere_radius = (actual_length + actual_radius) / 2
+            c_shape_tag = adom.createElement("sphere")
+            c_shape_tag.setAttribute("radius", str(sphere_radius))
+        else:
+            c_shape_tag = adom.createElement("box")
+            box_size = str(actual_radius*2) + " " + str(actual_radius*2) + " " + str(actual_length)
+            c_shape_tag.setAttribute("size", box_size)
+
+        c_geom_tag.appendChild(c_shape_tag)
         coll_tag.appendChild(c_geom_tag)
 
         #     <inertial>
@@ -284,16 +319,34 @@ class URDFLink:
         #     </inertial>
         inertial_tag = adom.createElement("inertial")
         mass_tag = adom.createElement("mass")
-        # Mass = density * volume = pi * r^2 * height (assuming density = 1)
-        mass = np.pi * (actual_radius * actual_radius) * actual_length
         mass_tag.setAttribute("value", str(mass))
         inertia_tag = adom.createElement("inertia")
-        # Calculate proper inertia for a solid cylinder
-        # Ixx = Iyy = (1/12) * m * (3*r^2 + h^2)
-        # Izz = (1/2) * m * r^2
-        ixx = (1.0/12.0) * mass * (3 * actual_radius * actual_radius + actual_length * actual_length)
-        iyy = ixx
-        izz = (1.0/2.0) * mass * actual_radius * actual_radius
+        # Calculate proper inertia based on shape type
+        if self.link_shape <= 0.33:
+            # Cylinder inertia
+            # Ixx = Iyy = (1/12) * m * (3*r^2 + h^2)
+            # Izz = (1/2) * m * r^2
+            ixx = (1.0/12.0) * mass * (3 * actual_radius * actual_radius + actual_length * actual_length)
+            iyy = ixx
+            izz = (1.0/2.0) * mass * actual_radius * actual_radius
+        elif self.link_shape <= 0.66:
+            # Sphere inertia (solid sphere)
+            # Ixx = Iyy = Izz = (2/5) * m * r^2
+            sphere_radius = (actual_length + actual_radius) / 2
+            ixx = (2.0/5.0) * mass * sphere_radius * sphere_radius
+            iyy = ixx
+            izz = ixx
+        else:
+            # Box inertia (solid cuboid)
+            # Ixx = (1/12) * m * (h^2 + d^2)
+            # Iyy = (1/12) * m * (w^2 + h^2)
+            # Izz = (1/12) * m * (w^2 + d^2)
+            w = actual_radius * 2
+            d = actual_radius * 2
+            h = actual_length
+            ixx = (1.0/12.0) * mass * (h*h + d*d)
+            iyy = (1.0/12.0) * mass * (w*w + h*h)
+            izz = (1.0/12.0) * mass * (w*w + d*d)
         inertia_tag.setAttribute("ixx", str(ixx))
         inertia_tag.setAttribute("iyy", str(iyy))
         inertia_tag.setAttribute("izz", str(izz))

@@ -242,3 +242,86 @@ CODE (genome.py, get_gene_spec method):
 WHY: Higher frequency oscillation enables faster leg/limb movements. Combined
      with the increased joint velocity limit (5 rad/s), creatures can now
      evolve gaits with faster stepping patterns needed for climbing.
+
+================================================================================
+10. GENE COUNT - INCREASED FOR MORE COMPLEX BODY STRUCTURES
+================================================================================
+
+PROBLEM: With gene_count=4, creatures could only have 4 body segments maximum.
+         This limits the complexity of body plans - creatures need more parts
+         to evolve effective locomotion strategies like multiple legs or
+         articulated limbs.
+
+CHANGES:
+| File                 | Old Value | New Value | Reason                         |
+|----------------------|-----------|-----------|--------------------------------|
+| test_ga_mountain.py  | 4         | 6         | More body segments for climbing|
+| test_ga.py           | 4         | 6         | Consistent with main GA        |
+| test_ga_no_threads.py| 3         | 6         | Consistent with main GA        |
+
+CODE (test_ga_mountain.py, test_ga.py, test_ga_no_threads.py):
+    pop = population.Population(pop_size=15, gene_count=6)  # Was 4 or 3
+
+WHY: More genes allow creatures to evolve more complex body plans with
+     additional limbs or segments. This increases the search space but also
+     enables more sophisticated locomotion strategies. 6 parts can form
+     body + 5 limbs (like a starfish) or body + 2 arms + 2 legs + tail.
+
+================================================================================
+11. LINK SHAPES - IMPLEMENTED SHAPE VARIATION (cylinder, sphere, box)
+================================================================================
+
+PROBLEM: The `link-shape` gene was defined in the gene spec but NEVER USED.
+         All body parts were always cylinders regardless of the gene value.
+         This prevented creatures from evolving different body part shapes
+         that might be better suited for climbing (e.g., spheres for rolling,
+         boxes for grip).
+
+CHANGES:
+| Component          | Old Behavior           | New Behavior                    |
+|--------------------|------------------------|---------------------------------|
+| link-shape gene    | Defined but ignored    | Now determines shape type       |
+| Shape selection    | Always cylinder        | 0-0.33: cylinder, 0.33-0.66: sphere, 0.66-1.0: box |
+| URDFLink.__init__  | No link_shape param    | Added link_shape parameter      |
+| genome_to_links    | No link-shape passed   | Now passes link-shape to URDFLink |
+| to_link_element    | Only creates cylinders | Creates cylinder/sphere/box     |
+| Inertia calc       | Cylinder formula only  | Proper formulas for each shape  |
+
+CODE (genome.py):
+
+1. URDFLink.__init__ now accepts link_shape parameter:
+    def __init__(self, name, parent_name, recur,
+                link_shape=0.1,  # NEW
+                link_length=0.1,
+                ...
+
+2. genome_to_links passes link-shape gene:
+    link = URDFLink(name=link_name,
+                    parent_name=parent_name,
+                    recur=recur,
+                    link_shape=gdict["link-shape"],  # NEW
+                    ...
+
+3. to_link_element creates different shapes:
+    if self.link_shape <= 0.33:
+        # Cylinder
+        shape_tag = adom.createElement("cylinder")
+    elif self.link_shape <= 0.66:
+        # Sphere
+        shape_tag = adom.createElement("sphere")
+    else:
+        # Box
+        shape_tag = adom.createElement("box")
+
+4. Inertia calculated correctly for each shape type:
+    - Cylinder: Ixx = (1/12) * m * (3*r^2 + h^2)
+    - Sphere:   Ixx = Iyy = Izz = (2/5) * m * r^2
+    - Box:      Proper cuboid inertia formulas
+
+WHY: Different shapes provide different locomotion advantages:
+     - Cylinders: Good for rolling, standard limb shape
+     - Spheres: Can roll in any direction, good for feet/joints
+     - Boxes: More surface area for grip, stable base
+
+     The PDF allows modifications to "shape of the parts of the robot".
+     This enables the GA to explore a much richer morphology space.
