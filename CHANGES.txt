@@ -6,51 +6,73 @@ This document logs all modifications made to address the PDF Part B requirement:
 "get as high as possible up the mountain, without cheating and flying into the air"
 
 ================================================================================
-1. FITNESS FUNCTION IMPROVEMENTS (creature.py)
+1. FITNESS FUNCTION - SIMPLIFIED FOR CLIMBING (creature.py)
 ================================================================================
 
-PROBLEM: Creatures were evolving to be TALL rather than actually CLIMBING.
-         The original fitness rewarded max height, which tall stationary
-         creatures could exploit.
+PROBLEM: Creatures were evolving to be TALL or just standing still rather than
+         actually CLIMBING. The original grounding bonus (0.5 for staying
+         grounded) was rewarding stationary creatures over mobile ones.
+
+CURRENT FITNESS FUNCTION (get_climbing_fitness):
+    fitness = (progress * 2.5) + final_height + movement_bonus - surface_penalty
+
+COMPONENTS:
+1. Progress toward peak (weight: 2.5x) - PRIMARY REWARD
+   - Measures: initial_distance_to_peak - final_distance_to_peak
+   - Rewards horizontal movement toward mountain center (0, 0)
+   - Heavily weighted because PDF says "maximum closeness to the top"
+
+2. Final height (weight: 1.0x)
+   - Measures: final_position[2] - baseline_height
+   - Rewards vertical climbing (lowest point of creature)
+
+3. Movement bonus (capped at 1.5)
+   - Measures: distance_travelled * 0.3 (max 1.5)
+   - Rewards ANY movement to encourage locomotion development
+   - Even moving away from peak is better than standing still
+
+4. Surface penalty
+   - Measures: max(0, height_above_surface - 0.5) * 0.5
+   - Penalizes creatures floating/flying above the mountain surface
+
+REMOVED: Grounding bonus (was rewarding stationary creatures)
+
+WHY: The PDF requires "maximum closeness to the top of the mountain". The
+     previous fitness gave 0.5 just for standing still (grounding bonus),
+     which dominated early evolution and selected for stable non-moving
+     creatures. By removing grounding bonus and adding movement bonus,
+     creatures that develop any locomotion capability are now rewarded.
+
+================================================================================
+2. LOWEST POINT TRACKING - ALL LINKS (simulation.py, realtime_from_csv.py)
+================================================================================
+
+PROBLEM: PyBullet's getAABB(bodyId) with default linkIndex=-1 only returns the
+         AABB of the BASE LINK, not the entire creature. A creature with a tall
+         limb extending from a small base would still measure only the base's
+         low position, not accounting for the limb.
 
 CHANGES:
-- Added get_climbing_fitness() method with 4 components:
-  * Final height (not max) - rewards sustainable position at end of simulation
-  * Surface penalty - penalizes creatures hovering above mountain surface
-  * Progress toward peak - rewards movement toward mountain center (0,0)
-  * Grounding bonus - rewards maintaining contact with ground/mountain
+- Updated get_lowest_point() to iterate through ALL links of the creature
+- For each link (base + all child links), get its AABB and track the minimum Z
+- Returns the true lowest Z coordinate across the entire creature body
 
-- Added tracking variables:
-  * final_position - creature's position at end of simulation
-  * grounded_height_sum / grounded_steps - tracks height only when grounded
-  * is_grounded - current ground contact state
-  * initial_distance_to_peak / final_distance_to_peak - progress tracking
+CODE:
+    def get_lowest_point(self, creature_id, pid):
+        # Start with base link AABB
+        aabb_min, aabb_max = p.getAABB(creature_id, -1, physicsClientId=pid)
+        lowest_z = aabb_min[2]
+        # Check all child links
+        num_joints = p.getNumJoints(creature_id, physicsClientId=pid)
+        for link_idx in range(num_joints):
+            link_aabb_min, _ = p.getAABB(creature_id, link_idx, physicsClientId=pid)
+            if link_aabb_min[2] < lowest_z:
+                lowest_z = link_aabb_min[2]
+        return lowest_z
 
-- Added get_mountain_height(x, y) - calculates expected surface height using
-  the same Gaussian formula as the mountain: height * exp(-(x^2 + y^2) / (2*sigma^2))
-
-WHY: The PDF requires creatures to "climb" the mountain, not just be tall.
-     Using final position instead of max position rewards creatures that can
-     maintain their climbing progress. The surface penalty ensures creatures
-     are actually ON the mountain, not floating above it.
-
-================================================================================
-2. LOWEST POINT TRACKING (simulation.py, realtime_from_csv.py)
-================================================================================
-
-PROBLEM: PyBullet's getBasePositionAndOrientation() returns the CENTER of the
-         root body, not the bottom. A tall creature's "base position" would be
-         higher even when standing on the same surface as a short creature.
-
-CHANGES:
-- Added get_lowest_point() method using PyBullet's getAABB() to get the
-  creature's axis-aligned bounding box minimum Z coordinate
-- Height tracking now uses lowest point instead of base position
-- Final position for fitness uses lowest Z coordinate
-
-WHY: This prevents tall creatures from gaming the fitness by measuring from
-     their center. Now a 1m tall creature and a 0.2m creature both measure
-     height from where they actually touch the ground.
+WHY: This prevents tall creatures from gaming the fitness. The true lowest
+     point of the entire creature (including all limbs) is used for height
+     measurement. A creature cannot gain fitness by simply having tall limbs.
 
 ================================================================================
 3. GROUND CONTACT DETECTION (simulation.py, realtime_from_csv.py)
@@ -97,7 +119,28 @@ WHY: The original shrink > grow ratio (0.25 > 0.1) caused creatures to lose
      can develop locomotion strategies for climbing.
 
 ================================================================================
-6. LOG LABEL CORRECTION (test_ga_mountain.py)
+6. MOTOR FORCE INCREASE (simulation.py, realtime_from_csv.py)
+================================================================================
+
+PROBLEM: Creatures may not have enough motor force to generate locomotion,
+         especially on an inclined surface like the mountain.
+
+CHANGES:
+- Increased motor force from 5 to 12 in setJointMotorControl2()
+
+CODE:
+    p.setJointMotorControl2(cid, jid,
+            controlMode=p.VELOCITY_CONTROL,
+            targetVelocity=m.get_output(),
+            force=12,  # Was 5
+            physicsClientId=self.physicsClientId)
+
+WHY: Higher motor force allows creatures to actually move their limbs with
+     enough power to generate locomotion. The original force=5 may have been
+     insufficient for creatures to overcome friction and gravity on the slope.
+
+================================================================================
+7. LOG LABEL CORRECTION (test_ga_mountain.py)
 ================================================================================
 
 CHANGES:
@@ -111,30 +154,42 @@ FILES MODIFIED SUMMARY
 ================================================================================
 
 creature.py:
-  - New fitness tracking variables in __init__ and update_dna()
-  - New methods: get_mountain_height(), get_climbing_fitness(),
-    get_final_height(), get_height_above_surface(), get_progress_toward_peak(),
-    get_average_grounded_height(), update_grounded_state(),
-    update_grounded_height(), update_final_position()
+  - get_climbing_fitness(): Simplified fitness function
+    * Removed grounding bonus (was causing stationary creatures)
+    * Progress weight increased to 2.5x
+    * Added movement bonus (capped at 1.5)
+    * Kept surface penalty for anti-flying
+  - Tracking variables for fitness calculation
 
 simulation.py:
-  - Added get_lowest_point() using AABB
-  - Added check_ground_contact() using getContactPoints()
-  - Height tracking uses lowest point instead of base position
+  - get_lowest_point(): Now iterates ALL links (not just base)
+  - check_ground_contact(): Using getContactPoints() API
+  - Motor force: 5 -> 12
   - Spawn position: [5, 0, 3]
 
 realtime_from_csv.py:
-  - Added get_lowest_point() helper function
-  - Added check_ground_contact() helper function
-  - Uses get_climbing_fitness() instead of manual calculation
+  - get_lowest_point(): Now iterates ALL links (matches simulation.py)
+  - Motor force: Added force=12
   - Spawn position: [5, 0, 3] (matches training)
 
-test_ga.py:
-  - pop_size: 15, gene_count: 4
-  - point_mutate: rate=0.25, amount=0.5
-  - shrink_mutate: rate=0.1
-  - grow_mutate: rate=0.25
-
-test_ga_mountain.py:
-  - Same parameter changes as test_ga.py
+test_ga.py & test_ga_mountain.py:
+  - pop_size: 10 -> 15
+  - gene_count: 3 -> 4
+  - point_mutate: rate=0.1->0.25, amount=0.25->0.5
+  - shrink_mutate: rate=0.25 -> 0.1
+  - grow_mutate: rate=0.1 -> 0.25
   - Log label: "max fitness:" instead of "max height:"
+
+================================================================================
+EXPECTED BEHAVIOR AFTER CHANGES
+================================================================================
+
+Before: Creatures evolved to be tall cylinders that stood still (grounding
+        bonus = 0.5 dominated fitness).
+
+After:  Creatures should evolve locomotion because:
+        1. Standing still gives ~0 fitness (no progress, no movement bonus)
+        2. Any movement gives positive movement bonus (up to 1.5)
+        3. Moving toward peak gives 2.5x progress reward
+        4. Higher motor force enables actual locomotion
+        5. True lowest point tracking prevents tall-limb exploitation

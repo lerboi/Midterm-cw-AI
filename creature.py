@@ -308,48 +308,45 @@ class Creature:
 
     def get_climbing_fitness(self):
         """
-        NEW FITNESS FUNCTION - Designed to reward actual climbing behavior.
+        FITNESS FUNCTION - Designed to reward actual climbing behavior.
 
         Addresses PDF Part B requirement: "get as high as possible up the
         mountain, without cheating and flying into the air"
 
-        Components:
-        1. Final height (not max) - rewards sustainable position
-        2. Height above surface - ensures creature is ON the mountain
-        3. Progress toward peak - rewards moving toward (0,0)
-        4. Grounding bonus - rewards staying in contact with surface
+        Simplified fitness focused on:
+        1. Progress toward peak (horizontal movement to center) - HEAVILY weighted
+        2. Final height (vertical climbing)
+        3. Movement bonus (any displacement rewards locomotion)
+        4. Surface penalty (prevent flying/floating)
 
         Returns:
             float: Combined climbing fitness score
         """
-        # Component 1: FINAL height relative to baseline (not max)
-        # This prevents brief spikes from jumping/falling from being rewarded
-        final_height = self.get_final_height()
-
-        # Component 2: Height above mountain surface
-        # Small values = creature is ON the surface (good for climbing)
-        # Large values = creature is floating/flying (bad)
-        height_above_surface = self.get_height_above_surface()
-
-        # Penalize if creature is too high above surface (likely not climbing)
-        # Ideal: creature is within 0.5 units of surface
-        surface_penalty = max(0, height_above_surface - 0.5) * 0.5
-
-        # Component 3: Progress toward peak
-        # Rewards creatures that moved closer to (0, 0)
+        # Component 1: Progress toward peak - PRIMARY REWARD
+        # PDF says "maximum closeness to the top of the mountain"
+        # Weight heavily to encourage movement toward center
         progress = self.get_progress_toward_peak()
 
-        # Component 4: Grounding bonus
-        # Rewards creatures that stayed in contact with surface
-        grounding_ratio = self.grounded_steps / max(1, 1920)  # ~1920 tracking steps
-        grounding_bonus = grounding_ratio * 0.5
+        # Component 2: Final height relative to baseline
+        # Rewards actual vertical climbing
+        final_height = self.get_final_height()
+
+        # Component 3: Movement bonus - reward ANY movement
+        # This encourages creatures to develop locomotion capabilities
+        # Even moving away from peak is better than standing still
+        distance_moved = self.get_distance_travelled()
+        movement_bonus = min(distance_moved * 0.3, 1.5)  # Cap at 1.5
+
+        # Component 4: Surface penalty - prevent flying/floating
+        height_above_surface = self.get_height_above_surface()
+        surface_penalty = max(0, height_above_surface - 0.5) * 0.5
 
         # Combined fitness:
-        # - Final height (main reward for climbing)
-        # - Progress toward peak (reward for moving to center)
-        # - Grounding bonus (reward for staying on surface)
-        # - Surface penalty (penalize floating/flying)
-        fitness = final_height + (progress * 1.0) + grounding_bonus - surface_penalty
+        # - Progress heavily weighted (2.5x) - main goal is reaching peak
+        # - Final height (1.0x) - reward vertical climbing
+        # - Movement bonus - encourage developing locomotion
+        # - Surface penalty - prevent cheating by flying
+        fitness = (progress * 2.5) + final_height + movement_bonus - surface_penalty
 
         # Ensure non-negative fitness
         return max(0, fitness)

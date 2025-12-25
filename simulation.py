@@ -94,15 +94,28 @@ class Simulation:
 
     def get_lowest_point(self, creature_id, pid):
         """
-        Get the lowest Z coordinate of the creature using AABB.
+        Get the lowest Z coordinate of the ENTIRE creature by checking all links.
+        PyBullet's getAABB with linkIndex=-1 only returns the base link AABB.
+        We need to iterate through all links to get the true lowest point.
+
         This prevents tall creatures from gaming the fitness by measuring
         from their center instead of their actual ground contact point.
 
         Returns:
-            float: Lowest Z coordinate of the creature's bounding box
+            float: Lowest Z coordinate across all parts of the creature
         """
-        aabb_min, aabb_max = p.getAABB(creature_id, physicsClientId=pid)
-        return aabb_min[2]
+        # Start with base link AABB
+        aabb_min, aabb_max = p.getAABB(creature_id, -1, physicsClientId=pid)
+        lowest_z = aabb_min[2]
+
+        # Check all child links
+        num_joints = p.getNumJoints(creature_id, physicsClientId=pid)
+        for link_idx in range(num_joints):
+            link_aabb_min, link_aabb_max = p.getAABB(creature_id, link_idx, physicsClientId=pid)
+            if link_aabb_min[2] < lowest_z:
+                lowest_z = link_aabb_min[2]
+
+        return lowest_z
 
     def update_motors(self, cid, cr):
         """
@@ -116,7 +129,7 @@ class Simulation:
             p.setJointMotorControl2(cid, jid,
                     controlMode=p.VELOCITY_CONTROL,
                     targetVelocity=m.get_output(),
-                    force=5,
+                    force=12,
                     physicsClientId=self.physicsClientId)
         
 

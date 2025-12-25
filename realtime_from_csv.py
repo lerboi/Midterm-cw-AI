@@ -61,10 +61,18 @@ def main(csv_file):
             return True
         return False
 
-    # Helper function to get lowest point of creature (same as simulation.py)
+    # Helper function to get lowest point of ENTIRE creature (same as simulation.py)
     def get_lowest_point(creature_id, pid):
-        aabb_min, aabb_max = p.getAABB(creature_id, physicsClientId=pid)
-        return aabb_min[2]
+        # Start with base link AABB
+        aabb_min, aabb_max = p.getAABB(creature_id, -1, physicsClientId=pid)
+        lowest_z = aabb_min[2]
+        # Check all child links
+        num_joints = p.getNumJoints(creature_id, physicsClientId=pid)
+        for link_idx in range(num_joints):
+            link_aabb_min, link_aabb_max = p.getAABB(creature_id, link_idx, physicsClientId=pid)
+            if link_aabb_min[2] < lowest_z:
+                lowest_z = link_aabb_min[2]
+        return lowest_z
 
     # iterate
     elapsed_time = 0
@@ -85,6 +93,7 @@ def main(csv_file):
                             jid,
                             controlMode=mode,
                             targetVelocity=vel,
+                            force=12,
                             physicsClientId=pid)
 
             # Track using creature's methods (same as training)
