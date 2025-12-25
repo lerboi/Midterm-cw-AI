@@ -1,0 +1,140 @@
+================================================================================
+CM3020 AI COURSEWORK PART B - CODE MODIFICATIONS LOG
+================================================================================
+
+This document logs all modifications made to address the PDF Part B requirement:
+"get as high as possible up the mountain, without cheating and flying into the air"
+
+================================================================================
+1. FITNESS FUNCTION IMPROVEMENTS (creature.py)
+================================================================================
+
+PROBLEM: Creatures were evolving to be TALL rather than actually CLIMBING.
+         The original fitness rewarded max height, which tall stationary
+         creatures could exploit.
+
+CHANGES:
+- Added get_climbing_fitness() method with 4 components:
+  * Final height (not max) - rewards sustainable position at end of simulation
+  * Surface penalty - penalizes creatures hovering above mountain surface
+  * Progress toward peak - rewards movement toward mountain center (0,0)
+  * Grounding bonus - rewards maintaining contact with ground/mountain
+
+- Added tracking variables:
+  * final_position - creature's position at end of simulation
+  * grounded_height_sum / grounded_steps - tracks height only when grounded
+  * is_grounded - current ground contact state
+  * initial_distance_to_peak / final_distance_to_peak - progress tracking
+
+- Added get_mountain_height(x, y) - calculates expected surface height using
+  the same Gaussian formula as the mountain: height * exp(-(x^2 + y^2) / (2*sigma^2))
+
+WHY: The PDF requires creatures to "climb" the mountain, not just be tall.
+     Using final position instead of max position rewards creatures that can
+     maintain their climbing progress. The surface penalty ensures creatures
+     are actually ON the mountain, not floating above it.
+
+================================================================================
+2. LOWEST POINT TRACKING (simulation.py, realtime_from_csv.py)
+================================================================================
+
+PROBLEM: PyBullet's getBasePositionAndOrientation() returns the CENTER of the
+         root body, not the bottom. A tall creature's "base position" would be
+         higher even when standing on the same surface as a short creature.
+
+CHANGES:
+- Added get_lowest_point() method using PyBullet's getAABB() to get the
+  creature's axis-aligned bounding box minimum Z coordinate
+- Height tracking now uses lowest point instead of base position
+- Final position for fitness uses lowest Z coordinate
+
+WHY: This prevents tall creatures from gaming the fitness by measuring from
+     their center. Now a 1m tall creature and a 0.2m creature both measure
+     height from where they actually touch the ground.
+
+================================================================================
+3. GROUND CONTACT DETECTION (simulation.py, realtime_from_csv.py)
+================================================================================
+
+CHANGES:
+- Added check_ground_contact() using PyBullet's getContactPoints() API
+- Tracks contact with both mountain and floor surfaces
+- Grounding bonus in fitness rewards creatures that maintain ground contact
+
+WHY: A creature that "climbs" should be in contact with the climbing surface.
+     This prevents rewarding creatures that jump, fly, or fall through the air.
+
+================================================================================
+4. SPAWN POSITION CONSISTENCY (simulation.py, realtime_from_csv.py)
+================================================================================
+
+CHANGES:
+- Standardized spawn position to [5, 0, 3] in both training and testing
+- Updated initial_distance_to_peak to 5.0 to match
+
+WHY: Training and testing must use identical conditions for fair evaluation.
+
+================================================================================
+5. GA PARAMETERS - INCREASED EXPLORATION (test_ga.py, test_ga_mountain.py)
+================================================================================
+
+PROBLEM: Creatures were converging to simple cylinder shapes (local optimum).
+         The shrink rate was higher than grow rate, causing loss of complexity.
+
+CHANGES:
+| Parameter          | Old Value | New Value | Reason                          |
+|--------------------|-----------|-----------|----------------------------------|
+| pop_size           | 10        | 15        | More diversity per generation    |
+| gene_count         | 3         | 4         | Start with more body segments    |
+| point_mutate rate  | 0.1       | 0.25      | More frequent gene changes       |
+| point_mutate amount| 0.25      | 0.5       | Larger mutations to escape optima|
+| shrink_mutate rate | 0.25      | 0.1       | Less likely to lose limbs        |
+| grow_mutate rate   | 0.1       | 0.25      | More likely to add new limbs     |
+
+WHY: The original shrink > grow ratio (0.25 > 0.1) caused creatures to lose
+     limbs faster than they gained them, converging to simple shapes. The new
+     grow > shrink ratio (0.25 > 0.1) encourages more complex creatures that
+     can develop locomotion strategies for climbing.
+
+================================================================================
+6. LOG LABEL CORRECTION (test_ga_mountain.py)
+================================================================================
+
+CHANGES:
+- Changed log output from "max height:" to "max fitness:"
+
+WHY: The logged value is get_climbing_fitness(), not raw height. Accurate
+     labeling prevents confusion during training observation.
+
+================================================================================
+FILES MODIFIED SUMMARY
+================================================================================
+
+creature.py:
+  - New fitness tracking variables in __init__ and update_dna()
+  - New methods: get_mountain_height(), get_climbing_fitness(),
+    get_final_height(), get_height_above_surface(), get_progress_toward_peak(),
+    get_average_grounded_height(), update_grounded_state(),
+    update_grounded_height(), update_final_position()
+
+simulation.py:
+  - Added get_lowest_point() using AABB
+  - Added check_ground_contact() using getContactPoints()
+  - Height tracking uses lowest point instead of base position
+  - Spawn position: [5, 0, 3]
+
+realtime_from_csv.py:
+  - Added get_lowest_point() helper function
+  - Added check_ground_contact() helper function
+  - Uses get_climbing_fitness() instead of manual calculation
+  - Spawn position: [5, 0, 3] (matches training)
+
+test_ga.py:
+  - pop_size: 15, gene_count: 4
+  - point_mutate: rate=0.25, amount=0.5
+  - shrink_mutate: rate=0.1
+  - grow_mutate: rate=0.25
+
+test_ga_mountain.py:
+  - Same parameter changes as test_ga.py
+  - Log label: "max fitness:" instead of "max height:"

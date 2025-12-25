@@ -15,8 +15,8 @@ import os
 
 class TestGA(unittest.TestCase):
     def testBasicGA(self):
-        pop = population.Population(pop_size=10,
-                                    gene_count=3)
+        pop = population.Population(pop_size=15,
+                                    gene_count=4)
         sim = simulation.ThreadedSim(pool_size=1)
 
         for iteration in range(1000):
@@ -37,9 +37,9 @@ class TestGA(unittest.TestCase):
                 p2 = pop.creatures[p2_ind]
                 # crossover and mutation
                 dna = genome.Genome.crossover(p1.dna, p2.dna)
-                dna = genome.Genome.point_mutate(dna, rate=0.1, amount=0.25)
-                dna = genome.Genome.shrink_mutate(dna, rate=0.25)
-                dna = genome.Genome.grow_mutate(dna, rate=0.1)
+                dna = genome.Genome.point_mutate(dna, rate=0.25, amount=0.5)
+                dna = genome.Genome.shrink_mutate(dna, rate=0.1)
+                dna = genome.Genome.grow_mutate(dna, rate=0.25)
                 cr = creature.Creature(1)
                 cr.update_dna(dna)
                 new_creatures.append(cr)
