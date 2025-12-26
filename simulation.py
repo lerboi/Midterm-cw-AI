@@ -1,5 +1,6 @@
 import pybullet as p
 from multiprocessing import Pool
+import math
 
 class Simulation: 
     def __init__(self, sim_id=0):
@@ -32,11 +33,17 @@ class Simulation:
 
         cid = p.loadURDF(xml_file, physicsClientId=pid)
 
-        # Spawn creature at base of mountain
-        p.resetBasePositionAndOrientation(cid, [5, 0, 3], [0, 0, 0, 1], physicsClientId=pid)
+        # Spawn creature at base of mountain - calculate correct surface height
+        # Mountain uses Gaussian: height = 5 * exp(-(x² + y²) / 18) - 1
+        spawn_x = 3.0  # Spawn closer to mountain for better climbing opportunity
+        spawn_y = 0.0
+        # Calculate surface height at spawn position
+        surface_z = 5.0 * math.exp(-(spawn_x**2 + spawn_y**2) / 18.0) - 1.0
+        spawn_z = surface_z + 0.5  # Spawn 0.5 units above surface (prevents crash)
+        p.resetBasePositionAndOrientation(cid, [spawn_x, spawn_y, spawn_z], [0, 0, 0, 1], physicsClientId=pid)
 
         # Store initial distance to peak for progress tracking
-        cr.initial_distance_to_peak = 5.0  # Distance from (5, 0) to (0, 0)
+        cr.initial_distance_to_peak = math.sqrt(spawn_x**2 + spawn_y**2)  # Distance from spawn to (0, 0)
 
         # Phase 1: Brief settling period (480 steps = 0.5 seconds)
         for step in range(480):

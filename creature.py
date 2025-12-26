@@ -14,9 +14,9 @@ class Motor:
             self.motor_type = MotorType.PULSE
         else:
             self.motor_type = MotorType.SINE
-        # Amplitude is kept constant at 1.0 for fair testing across all creatures
-        # The control_amp gene is preserved in DNA structure but not applied
-        self.amp = 1.0
+        # Use control_amp gene to vary motor strength (range 0.5 to 1.5)
+        # This allows evolution to tune motor power for different limbs
+        self.amp = 0.5 + (control_amp * 4.0)  # Range 0.5 to 1.5 (control_amp is 0-0.25 after scaling)
         self.freq = control_freq
         self.phase = 0
 
@@ -335,7 +335,7 @@ class Creature:
         # This encourages creatures to develop locomotion capabilities
         # Even moving away from peak is better than standing still
         distance_moved = self.get_distance_travelled()
-        movement_bonus = min(distance_moved * 0.3, 1.5)  # Cap at 1.5
+        movement_bonus = min(distance_moved * 0.5, 3.0)  # Increased: was 0.3, 1.5
 
         # Component 4: Surface penalty - prevent flying/floating
         height_above_surface = self.get_height_above_surface()

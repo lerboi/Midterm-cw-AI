@@ -8,11 +8,25 @@ class Population:
                           for i in range(pop_size)]
 
     @staticmethod
-    def get_fitness_map(fits):
+    def get_fitness_map(fits, min_fitness=0.1):
+        """
+        Create cumulative fitness map for roulette wheel selection.
+
+        Args:
+            fits: List of fitness values
+            min_fitness: Minimum fitness floor to ensure selection pressure
+                        when all creatures have near-zero fitness
+
+        Returns:
+            Cumulative fitness map for selection
+        """
         fitmap = []
         total = 0
         for f in fits:
-            total = total + f
+            # Add minimum fitness floor to prevent random selection
+            # when all creatures have ~0 fitness
+            adjusted_f = f + min_fitness
+            total = total + adjusted_f
             fitmap.append(total)
         return fitmap
     

@@ -325,3 +325,109 @@ WHY: Different shapes provide different locomotion advantages:
 
      The PDF allows modifications to "shape of the parts of the robot".
      This enables the GA to explore a much richer morphology space.
+
+================================================================================
+12. SPAWN HEIGHT FIX - CREATURES NOW SPAWN ON MOUNTAIN SURFACE (simulation.py)
+================================================================================
+
+PROBLEM: Creatures were spawning at z=3, but the mountain surface at x=5 is
+         only at z≈0.25 (calculated from Gaussian formula). This meant
+         creatures were FALLING 2.75 UNITS at the start of every simulation,
+         causing them to crash/flip before they could even attempt to move.
+
+         This explains why creatures weren't climbing - they were damaged
+         at spawn.
+
+CHANGES:
+| Parameter      | Old Value     | New Value                           |
+|----------------|---------------|-------------------------------------|
+| spawn_x        | 5.0           | 3.0 (closer to peak)                |
+| spawn_z        | 3.0 (fixed)   | surface_z + 0.5 (calculated)        |
+| initial_dist   | 5.0 (fixed)   | sqrt(x² + y²) (calculated)          |
+
+CODE (simulation.py, run_creature method):
+    spawn_x = 3.0
+    spawn_y = 0.0
+    surface_z = 5.0 * math.exp(-(spawn_x**2 + spawn_y**2) / 18.0) - 1.0
+    spawn_z = surface_z + 0.5  # 0.5 units above surface
+    cr.initial_distance_to_peak = math.sqrt(spawn_x**2 + spawn_y**2)
+
+WHY: Creatures must start on the mountain surface to have any chance of
+     climbing. The Gaussian formula matches the mountain shape in
+     gaussian_pyramid.urdf. Spawning closer (x=3) gives creatures a better
+     starting position on the slope.
+
+================================================================================
+13. MOTOR AMPLITUDE - NOW USES CONTROL_AMP GENE (creature.py)
+================================================================================
+
+PROBLEM: Motor amplitude was hardcoded to 1.0, ignoring the control_amp gene.
+         This meant all motors had identical strength, preventing evolution
+         from tuning motor power for different limbs.
+
+CHANGES:
+| Parameter      | Old Value              | New Value                      |
+|----------------|------------------------|--------------------------------|
+| self.amp       | 1.0 (hardcoded)        | 0.5 + (control_amp * 4.0)      |
+| Range          | Always 1.0             | 0.5 to 1.5                     |
+
+CODE (creature.py, Motor.__init__):
+    self.amp = 0.5 + (control_amp * 4.0)  # control_amp is 0-0.25 after scaling
+
+WHY: Different limbs may need different motor strengths. Legs pushing against
+     ground may need more power than arms. This allows evolution to optimize
+     motor strength per joint.
+
+================================================================================
+14. MOVEMENT BONUS - INCREASED TO REWARD LOCOMOTION (creature.py)
+================================================================================
+
+PROBLEM: Movement bonus was capped at 1.5 with 0.3x multiplier, while progress
+         toward peak was weighted 2.5x. This meant:
+         - Moving 0.6 units toward peak = 1.5 fitness
+         - Moving 5+ units in any direction = 1.5 fitness (capped)
+
+         Creatures weren't incentivized to develop real locomotion.
+
+CHANGES:
+| Parameter      | Old Value | New Value | Reason                           |
+|----------------|-----------|-----------|----------------------------------|
+| Multiplier     | 0.3       | 0.5       | More reward per unit moved       |
+| Cap            | 1.5       | 3.0       | Higher ceiling for movers        |
+
+CODE (creature.py, get_climbing_fitness):
+    movement_bonus = min(distance_moved * 0.5, 3.0)  # Was 0.3, 1.5
+
+WHY: To evolve locomotion, creatures need strong incentive to MOVE. The higher
+     cap (3.0) means creatures that develop walking/rolling gaits are rewarded
+     more than stationary creatures. Combined with progress reward, this
+     encourages movement toward the peak.
+
+================================================================================
+15. SELECTION PRESSURE - ADDED MINIMUM FITNESS FLOOR (population.py)
+================================================================================
+
+PROBLEM: When all creatures have near-zero fitness (common in early generations
+         when no creature has figured out how to move), roulette wheel selection
+         becomes essentially RANDOM. This stalls evolution because:
+         - fitmap[-1] ≈ 0 when all fitness ≈ 0
+         - r * fitmap[-1] ≈ 0 for any random r
+         - Selection becomes arbitrary
+
+CHANGES:
+| Parameter      | Old Value | New Value | Reason                           |
+|----------------|-----------|-----------|----------------------------------|
+| min_fitness    | 0         | 0.1       | Ensures meaningful selection     |
+
+CODE (population.py, get_fitness_map):
+    def get_fitness_map(fits, min_fitness=0.1):
+        for f in fits:
+            adjusted_f = f + min_fitness
+            total = total + adjusted_f
+            fitmap.append(total)
+
+WHY: Adding 0.1 to each fitness ensures:
+     1. Even with all zeros, selection still works (uniform but not random)
+     2. Small fitness differences still matter (0.1 vs 0.2 = 33% vs 67%)
+     3. Creatures with any positive fitness get proportionally selected
+     4. Prevents division-by-zero-like behavior in selection
