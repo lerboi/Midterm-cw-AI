@@ -474,3 +474,41 @@ WHY: Creatures need VISIBLE, EXTENDED limbs to generate locomotion:
      Without these changes, creatures were evolving as single blobs with
      all limbs hidden inside - unable to move no matter how good the
      fitness function or motor settings.
+
+================================================================================
+17. PHYSICS ERROR HANDLING - GRACEFUL FAILURE FOR UNSTABLE CREATURES
+================================================================================
+
+PROBLEM: With increased limb sizes and recurrence, some creatures generate
+         physically unstable configurations that cause PyBullet to "explode"
+         them - destroying the physics body mid-simulation. This caused:
+
+         pybullet.error: GetBasePositionAndOrientation failed.
+
+         The error crashed the entire GA run instead of just penalizing
+         the unstable creature.
+
+CHANGES:
+| Location              | Change                                          |
+|-----------------------|-------------------------------------------------|
+| URDF loading          | Wrapped in try-except, return early on failure  |
+| Simulation loop       | Wrapped in try-except, use spawn pos on failure |
+| Creature fitness      | Unstable creatures get ~0 fitness (spawn pos)   |
+
+CODE (simulation.py, run_creature):
+    try:
+        cid = p.loadURDF(xml_file, physicsClientId=pid)
+    except Exception as e:
+        cr.update_final_position((0, 0, 0))
+        return
+
+    try:
+        for step in range(480, iterations):
+            # ... simulation loop ...
+    except Exception as e:
+        cr.update_final_position((spawn_x, spawn_y, spawn_z))
+
+WHY: Evolution naturally produces some invalid/unstable creature designs.
+     Rather than crashing, we let these creatures get 0 fitness and be
+     selected against. This is actually beneficial - the GA will learn
+     to avoid unstable configurations over generations.
