@@ -31,7 +31,12 @@ class Simulation:
         with open(xml_file, 'w') as f:
             f.write(xml_str)
 
-        cid = p.loadURDF(xml_file, physicsClientId=pid)
+        try:
+            cid = p.loadURDF(xml_file, physicsClientId=pid)
+        except Exception as e:
+            # Invalid URDF - creature gets 0 fitness
+            cr.update_final_position((0, 0, 0))
+            return
 
         # Spawn creature at base of mountain - calculate correct surface height
         # Mountain uses Gaussian: height = 5 * exp(-(x² + y²) / 18) - 1
@@ -51,31 +56,37 @@ class Simulation:
 
         # Phase 2: Main simulation with enhanced tracking
         # First call to update_max_height will set baseline to settled position
-        for step in range(480, iterations):
-            p.stepSimulation(physicsClientId=pid)
-            if step % 24 == 0:
-                self.update_motors(cid=cid, cr=cr)
+        # Wrap in try-except to handle physics instability (creature exploding)
+        try:
+            for step in range(480, iterations):
+                p.stepSimulation(physicsClientId=pid)
+                if step % 24 == 0:
+                    self.update_motors(cid=cid, cr=cr)
 
-            # Get base position for horizontal tracking (x, y)
-            base_pos, orn = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
-            cr.update_position(base_pos)
+                # Get base position for horizontal tracking (x, y)
+                base_pos, orn = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
+                cr.update_position(base_pos)
 
-            # Get LOWEST point of creature using AABB (prevents tall creatures from cheating)
-            # This measures from the bottom of the creature, not the center
+                # Get LOWEST point of creature using AABB (prevents tall creatures from cheating)
+                # This measures from the bottom of the creature, not the center
+                lowest_z = self.get_lowest_point(cid, pid)
+                lowest_pos = (base_pos[0], base_pos[1], lowest_z)
+                cr.update_max_height(lowest_pos)  # Track height of lowest point
+
+                # Check ground contact with mountain or floor
+                is_grounded = self.check_ground_contact(cid, mountain_id, floor_id, pid)
+                cr.update_grounded_state(is_grounded)
+                cr.update_grounded_height(lowest_pos)  # Only counts when grounded
+
+            # Store final position using lowest point for fitness calculation
+            base_pos, _ = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
             lowest_z = self.get_lowest_point(cid, pid)
-            lowest_pos = (base_pos[0], base_pos[1], lowest_z)
-            cr.update_max_height(lowest_pos)  # Track height of lowest point
-
-            # Check ground contact with mountain or floor
-            is_grounded = self.check_ground_contact(cid, mountain_id, floor_id, pid)
-            cr.update_grounded_state(is_grounded)
-            cr.update_grounded_height(lowest_pos)  # Only counts when grounded
-
-        # Store final position using lowest point for fitness calculation
-        base_pos, _ = p.getBasePositionAndOrientation(cid, physicsClientId=pid)
-        lowest_z = self.get_lowest_point(cid, pid)
-        final_pos = (base_pos[0], base_pos[1], lowest_z)
-        cr.update_final_position(final_pos)
+            final_pos = (base_pos[0], base_pos[1], lowest_z)
+            cr.update_final_position(final_pos)
+        except Exception as e:
+            # Physics became unstable - creature gets 0 fitness
+            # This can happen with complex/unstable creature geometries
+            cr.update_final_position((spawn_x, spawn_y, spawn_z))  # Use spawn position
 
     def check_ground_contact(self, creature_id, mountain_id, floor_id, pid):
         """
