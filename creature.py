@@ -35,9 +35,13 @@ class Motor:
         return output * self.amp
 
 class Creature:
-    def __init__(self, gene_count):
+    def __init__(self, gene_count, use_fixed_walker=False):
         self.spec = genome.Genome.get_gene_spec()
-        self.dna = genome.Genome.get_random_genome(len(self.spec), gene_count)
+        if use_fixed_walker:
+            # Use fixed walker body - only motor control genes are random
+            self.dna = genome.Genome.get_fixed_walker_genome(len(self.spec))
+        else:
+            self.dna = genome.Genome.get_random_genome(len(self.spec), gene_count)
         self.flat_links = None
         self.exp_links = None
         self.motors = None
@@ -308,45 +312,43 @@ class Creature:
 
     def get_climbing_fitness(self):
         """
-        FITNESS FUNCTION - Designed to reward actual climbing behavior.
+        MOVEMENT-FIRST FITNESS FUNCTION
 
-        Addresses PDF Part B requirement: "get as high as possible up the
-        mountain, without cheating and flying into the air"
+        Key insight: Creatures can't climb if they can't move.
+        This fitness function heavily rewards ANY movement to create
+        a gradient for evolution to follow.
 
-        Fitness components:
-        1. Progress toward peak (horizontal movement to center) - HEAVILY weighted
-        2. Final height (vertical climbing)
-        3. Movement bonus (any displacement rewards locomotion)
-        4. Surface penalty (prevent flying/floating)
+        Phase 1 (early evolution): Movement dominates
+        Phase 2 (later): Height gains become significant
+
+        Addresses PDF Part B: "get as high as possible up the mountain"
 
         Returns:
-            float: Combined climbing fitness score
+            float: Fitness score with movement as primary component
         """
-        # Component 1: Progress toward peak - PRIMARY REWARD
-        # PDF says "maximum closeness to the top of the mountain"
-        # Weight heavily to encourage movement toward center
-        progress = self.get_progress_toward_peak()
+        # Component 1: MOVEMENT - PRIMARY REWARD
+        # Any displacement from start position is rewarded
+        # This creates a gradient even for random twitching
+        distance_moved = self.get_distance_travelled()
+        movement_reward = distance_moved * 2.0  # Strong reward, NO CAP
 
-        # Component 2: Final height relative to baseline
+        # Component 2: Progress toward peak
+        # Rewards movement in the right direction (toward center)
+        progress = self.get_progress_toward_peak()
+        progress_reward = max(0, progress) * 3.0  # Only reward positive progress
+
+        # Component 3: Final height
         # Rewards actual vertical climbing
         final_height = self.get_final_height()
-
-        # Component 3: Movement bonus - reward ANY movement
-        # This encourages creatures to develop locomotion capabilities
-        # Even moving away from peak is better than standing still
-        distance_moved = self.get_distance_travelled()
-        movement_bonus = min(distance_moved * 0.5, 3.0)
-
-        # Component 4: Surface penalty - prevent flying/floating
-        height_above_surface = self.get_height_above_surface()
-        surface_penalty = max(0, height_above_surface - 0.5) * 0.5
+        height_reward = max(0, final_height) * 2.0
 
         # Combined fitness:
-        # - Progress heavily weighted (2.5x) - main goal is reaching peak
-        # - Final height (1.0x) - reward vertical climbing
-        # - Movement bonus - encourage developing locomotion
-        # - Surface penalty - prevent cheating by flying
-        fitness = (progress * 2.5) + final_height + movement_bonus - surface_penalty
+        # Movement is uncapped - creatures that move MORE always score higher
+        # This ensures even random motor patterns that cause movement are rewarded
+        fitness = movement_reward + progress_reward + height_reward
 
-        # Ensure non-negative fitness
+        # Small base fitness for creatures that at least don't crash
+        if self.final_position is not None:
+            fitness += 0.1
+
         return max(0, fitness)

@@ -6,721 +6,175 @@ This document logs all modifications made to address the PDF Part B requirement:
 "get as high as possible up the mountain, without cheating and flying into the air"
 
 ================================================================================
-1. FITNESS FUNCTION - SIMPLIFIED FOR CLIMBING (creature.py)
+SUMMARY OF PREVIOUS APPROACHES (Did Not Work)
 ================================================================================
 
-PROBLEM: Creatures were evolving to be TALL or just standing still rather than
-         actually CLIMBING. The original grounding bonus (0.5 for staying
-         grounded) was rewarding stationary creatures over mobile ones.
+We initially attempted to evolve both creature MORPHOLOGY (body shape) and
+MOTOR CONTROL (movement patterns) simultaneously. Despite many iterations
+and parameter adjustments, this approach consistently failed:
 
-CURRENT FITNESS FUNCTION (get_climbing_fitness):
-    fitness = (progress * 2.5) + final_height + movement_bonus - surface_penalty
+ATTEMPTS MADE:
+1. Adjusted fitness function weights (progress, height, movement bonuses)
+2. Added ground contact detection and surface penalties
+3. Modified joint limits, motor force, and frequency parameters
+4. Changed link shapes (cylinders, spheres, boxes)
+5. Adjusted joint positioning to prevent overlapping/floating limbs
+6. Increased population size and mutation rates
+7. Modified spawn position for better climbing gradient
 
-COMPONENTS:
-1. Progress toward peak (weight: 2.5x) - PRIMARY REWARD
-   - Measures: initial_distance_to_peak - final_distance_to_peak
-   - Rewards horizontal movement toward mountain center (0, 0)
-   - Heavily weighted because PDF says "maximum closeness to the top"
+RESULT: After 1000+ generations, fitness remained at 0. Creatures evolved as
+        blobs or simple shapes that twitched in place without locomotion.
 
-2. Final height (weight: 1.0x)
-   - Measures: final_position[2] - baseline_height
-   - Rewards vertical climbing (lowest point of creature)
-
-3. Movement bonus (capped at 1.5)
-   - Measures: distance_travelled * 0.3 (max 1.5)
-   - Rewards ANY movement to encourage locomotion development
-   - Even moving away from peak is better than standing still
-
-4. Surface penalty
-   - Measures: max(0, height_above_surface - 0.5) * 0.5
-   - Penalizes creatures floating/flying above the mountain surface
-
-REMOVED: Grounding bonus (was rewarding stationary creatures)
-
-WHY: The PDF requires "maximum closeness to the top of the mountain". The
-     previous fitness gave 0.5 just for standing still (grounding bonus),
-     which dominated early evolution and selected for stable non-moving
-     creatures. By removing grounding bonus and adding movement bonus,
-     creatures that develop any locomotion capability are now rewarded.
+ROOT CAUSE: The search space for evolving both morphology AND control is
+            enormous. Random creatures almost never produce functional bodies,
+            and random motor parameters almost never produce coordinated gaits.
+            Without any creatures moving, there's no fitness gradient for
+            evolution to follow - all creatures score ~0.
 
 ================================================================================
-2. LOWEST POINT TRACKING - ALL LINKS (simulation.py, realtime_from_csv.py)
+NEW APPROACH: FIXED WALKER WITH CONTROL-ONLY EVOLUTION
 ================================================================================
 
-PROBLEM: PyBullet's getAABB(bodyId) with default linkIndex=-1 only returns the
-         AABB of the BASE LINK, not the entire creature. A creature with a tall
-         limb extending from a small base would still measure only the base's
-         low position, not accounting for the limb.
+Following the PDF suggestion (page 4):
+"can you start with a fixed design robot, and just evolve the motor control
+parameters?"
 
-CHANGES:
-- Updated get_lowest_point() to iterate through ALL links of the creature
-- For each link (base + all child links), get its AABB and track the minimum Z
-- Returns the true lowest Z coordinate across the entire creature body
-
-CODE:
-    def get_lowest_point(self, creature_id, pid):
-        # Start with base link AABB
-        aabb_min, aabb_max = p.getAABB(creature_id, -1, physicsClientId=pid)
-        lowest_z = aabb_min[2]
-        # Check all child links
-        num_joints = p.getNumJoints(creature_id, physicsClientId=pid)
-        for link_idx in range(num_joints):
-            link_aabb_min, _ = p.getAABB(creature_id, link_idx, physicsClientId=pid)
-            if link_aabb_min[2] < lowest_z:
-                lowest_z = link_aabb_min[2]
-        return lowest_z
-
-WHY: This prevents tall creatures from gaming the fitness. The true lowest
-     point of the entire creature (including all limbs) is used for height
-     measurement. A creature cannot gain fitness by simply having tall limbs.
+This approach:
+1. Uses a FIXED body design (walker with body + legs)
+2. Only evolves MOTOR CONTROL genes (waveform, amplitude, frequency)
+3. Dramatically reduces search space (~80% smaller)
+4. Creates a fitness gradient that evolution can follow
 
 ================================================================================
-3. GROUND CONTACT DETECTION (simulation.py, realtime_from_csv.py)
+24. FIXED WALKER GENOME (genome.py)
 ================================================================================
 
-CHANGES:
-- Added check_ground_contact() using PyBullet's getContactPoints() API
-- Tracks contact with both mountain and floor surfaces
-- Grounding bonus in fitness rewards creatures that maintain ground contact
+IMPLEMENTATION: Added get_fixed_walker_genome() method
 
-WHY: A creature that "climbs" should be in contact with the climbing surface.
-     This prevents rewarding creatures that jump, fly, or fall through the air.
+Creates a fixed walker body structure:
+- Gene 0: Body (horizontal cylinder, radius 0.24, length 0.5)
+- Gene 1: Legs (3 legs via recurrence, length 0.7, spread around body)
 
-================================================================================
-4. SPAWN POSITION CONSISTENCY (simulation.py, realtime_from_csv.py)
-================================================================================
+Only motor control genes (indices 14-16) are randomized:
+- control-waveform: pulse vs sine wave
+- control-amp: motor amplitude
+- control-freq: motor frequency
 
-CHANGES:
-- Standardized spawn position to [5, 0, 3] in both training and testing
-- Updated initial_distance_to_peak to 5.0 to match
+CODE (genome.py):
+    @staticmethod
+    def get_fixed_walker_genome(gene_length):
+        # Gene 0: Body - fixed morphology
+        body_gene[0:14] = [fixed values for shape, size, joints]
+        body_gene[14:17] = [random motor control values]
 
-WHY: Training and testing must use identical conditions for fair evaluation.
+        # Gene 1: Legs - fixed morphology
+        leg_gene[0:14] = [fixed values for leg shape, attachment]
+        leg_gene[14:17] = [random motor control values]
 
-================================================================================
-5. GA PARAMETERS - INCREASED EXPLORATION (test_ga.py, test_ga_mountain.py)
-================================================================================
-
-PROBLEM: Creatures were converging to simple cylinder shapes (local optimum).
-         The shrink rate was higher than grow rate, causing loss of complexity.
-
-CHANGES:
-| Parameter          | Old Value | New Value | Reason                          |
-|--------------------|-----------|-----------|----------------------------------|
-| pop_size           | 10        | 15        | More diversity per generation    |
-| gene_count         | 3         | 4         | Start with more body segments    |
-| point_mutate rate  | 0.1       | 0.25      | More frequent gene changes       |
-| point_mutate amount| 0.25      | 0.5       | Larger mutations to escape optima|
-| shrink_mutate rate | 0.25      | 0.1       | Less likely to lose limbs        |
-| grow_mutate rate   | 0.1       | 0.25      | More likely to add new limbs     |
-
-WHY: The original shrink > grow ratio (0.25 > 0.1) caused creatures to lose
-     limbs faster than they gained them, converging to simple shapes. The new
-     grow > shrink ratio (0.25 > 0.1) encourages more complex creatures that
-     can develop locomotion strategies for climbing.
+WHY: Fixed body ensures all creatures CAN potentially walk. Evolution only
+     needs to find the right motor patterns, not discover body plans from scratch.
 
 ================================================================================
-6. MOTOR FORCE INCREASE (simulation.py, realtime_from_csv.py)
+25. CONTROL-ONLY MUTATION (genome.py)
 ================================================================================
 
-PROBLEM: Creatures may not have enough motor force to generate locomotion,
-         especially on an inclined surface like the mountain.
+IMPLEMENTATION: Added point_mutate_control_only() and crossover_control_only()
 
-CHANGES:
-- Increased motor force from 5 to 12 in setJointMotorControl2()
+These operators ONLY modify motor control genes (indices 14, 15, 16):
+- Preserves body morphology across generations
+- Allows evolution to focus on finding coordinated motor patterns
 
-CODE:
-    p.setJointMotorControl2(cid, jid,
-            controlMode=p.VELOCITY_CONTROL,
-            targetVelocity=m.get_output(),
-            force=12,  # Was 5
-            physicsClientId=self.physicsClientId)
+CODE (genome.py):
+    CONTROL_INDICES = [14, 15, 16]  # waveform, amp, freq
 
-WHY: Higher motor force allows creatures to actually move their limbs with
-     enough power to generate locomotion. The original force=5 may have been
-     insufficient for creatures to overcome friction and gravity on the slope.
+    def point_mutate_control_only(genome, rate, amount):
+        for gene in genome:
+            for i in CONTROL_INDICES:
+                if random.random() < rate:
+                    gene[i] += random.uniform(-amount, amount)
 
-================================================================================
-7. LOG LABEL CORRECTION (test_ga_mountain.py)
-================================================================================
+    def crossover_control_only(g1, g2):
+        # Copy g1's body structure, mix control genes from both parents
 
-CHANGES:
-- Changed log output from "max height:" to "max fitness:"
-
-WHY: The logged value is get_climbing_fitness(), not raw height. Accurate
-     labeling prevents confusion during training observation.
+WHY: Standard crossover/mutation would corrupt the fixed body structure.
+     Control-only operators preserve morphology while evolving motor patterns.
 
 ================================================================================
-FILES MODIFIED SUMMARY
+26. MOVEMENT-FIRST FITNESS (creature.py)
 ================================================================================
+
+IMPLEMENTATION: Rewrote get_climbing_fitness() to prioritize movement
+
+Previous fitness required climbing, but creatures couldn't climb without moving.
+New fitness heavily rewards ANY displacement:
+
+    movement_reward = distance_moved * 2.0  # UNCAPPED - more movement = higher fitness
+    progress_reward = max(0, progress) * 3.0  # Movement toward peak
+    height_reward = max(0, final_height) * 2.0  # Vertical climbing
+
+    fitness = movement_reward + progress_reward + height_reward + 0.1
+
+KEY CHANGES:
+- Movement reward has NO CAP (was capped at 3.0)
+- Removed surface penalty (was hurting exploration)
+- Base 0.1 fitness for any creature that doesn't crash
+
+WHY: Creates a fitness gradient even for random motor patterns. Any creature
+     that moves at all will score higher than stationary creatures. This gives
+     evolution a signal to follow.
+
+================================================================================
+27. FIXED WALKER GA LOOP (test_ga_mountain.py)
+================================================================================
+
+IMPLEMENTATION: Rewrote genetic algorithm to use fixed walker approach
+
+KEY CHANGES:
+1. Initial population uses fixed walker bodies:
+   creatures = [Creature(use_fixed_walker=True) for _ in range(pop_size)]
+
+2. Uses control-only genetic operators:
+   dna = genome.Genome.crossover_control_only(p1.dna, p2.dna)
+   dna = genome.Genome.point_mutate_control_only(dna, rate=0.4, amount=0.3)
+
+3. NO shrink/grow mutations (body structure is fixed)
+
+4. Higher mutation rate (0.4) since search space is smaller
+
+WHY: Implements the PDF-suggested approach of fixing body design and evolving
+     only motor control parameters.
+
+================================================================================
+EXPECTED BEHAVIOR
+================================================================================
+
+With the new approach:
+1. All creatures have identical, functional walker bodies
+2. Initial population will have varied motor patterns (random control genes)
+3. Some creatures will accidentally move due to random motor oscillations
+4. Moving creatures score higher → selected for reproduction
+5. Evolution finds coordinated motor patterns that produce locomotion
+6. Once locomotion evolves, climbing the mountain becomes possible
+
+The key insight is that evolving motor control for a FIXED body is much easier
+than evolving both body AND control simultaneously.
+
+================================================================================
+FILES MODIFIED
+================================================================================
+
+genome.py:
+  - Added get_fixed_walker_genome() - creates fixed body with random motors
+  - Added point_mutate_control_only() - mutates only motor genes
+  - Added crossover_control_only() - crosses only motor genes
 
 creature.py:
-  - get_climbing_fitness(): Simplified fitness function
-    * Removed grounding bonus (was causing stationary creatures)
-    * Progress weight increased to 2.5x
-    * Added movement bonus (capped at 1.5)
-    * Kept surface penalty for anti-flying
-  - Tracking variables for fitness calculation
+  - Modified __init__() to accept use_fixed_walker parameter
+  - Rewrote get_climbing_fitness() for movement-first evaluation
 
-simulation.py:
-  - get_lowest_point(): Now iterates ALL links (not just base)
-  - check_ground_contact(): Using getContactPoints() API
-  - Motor force: 5 -> 12
-  - Spawn position: [5, 0, 3]
-
-realtime_from_csv.py:
-  - get_lowest_point(): Now iterates ALL links (matches simulation.py)
-  - Motor force: Added force=12
-  - Spawn position: [5, 0, 3] (matches training)
-
-test_ga.py & test_ga_mountain.py:
-  - pop_size: 10 -> 15
-  - gene_count: 3 -> 4
-  - point_mutate: rate=0.1->0.25, amount=0.25->0.5
-  - shrink_mutate: rate=0.25 -> 0.1
-  - grow_mutate: rate=0.1 -> 0.25
-  - Log label: "max fitness:" instead of "max height:"
+test_ga_mountain.py:
+  - Rewrote GA loop to use fixed walker approach
+  - Uses control-only genetic operators
+  - Removed shrink/grow mutations
 
 ================================================================================
-EXPECTED BEHAVIOR AFTER CHANGES
-================================================================================
-
-Before: Creatures evolved to be tall cylinders that stood still (grounding
-        bonus = 0.5 dominated fitness).
-
-After:  Creatures should evolve locomotion because:
-        1. Standing still gives ~0 fitness (no progress, no movement bonus)
-        2. Any movement gives positive movement bonus (up to 1.5)
-        3. Moving toward peak gives 2.5x progress reward
-        4. Higher motor force enables actual locomotion
-        5. True lowest point tracking prevents tall-limb exploitation
-
-================================================================================
-8. JOINT LIMITS - INCREASED FOR LOCOMOTION (genome.py)
-================================================================================
-
-PROBLEM: After 1000+ generations, creatures still could not climb. The URDF
-         joint limits were acting as a physical bottleneck:
-         - Joint effort limit = 1 Nm (motor applies 12, but joint caps at 1)
-         - Joint velocity limit = 1 rad/s (too slow for locomotion)
-
-         The motor force (12) was being wasted because the joint itself could
-         only transmit 1 Nm of torque. This is like having a powerful engine
-         connected to a weak transmission.
-
-CHANGES:
-| Parameter       | Old Value | New Value | Reason                              |
-|-----------------|-----------|-----------|-------------------------------------|
-| Joint effort    | 1 Nm      | 10 Nm     | Allow motor force to transfer       |
-| Joint velocity  | 1 rad/s   | 5 rad/s   | Enable faster joint movement        |
-
-CODE (genome.py, to_joint_element method):
-    limit_tag.setAttribute("effort", "10")    # Was "1"
-    limit_tag.setAttribute("velocity", "5")   # Was "1"
-
-WHY: The PDF allows modifications to "motor controls" and "shape of the parts
-     of the robot". Joint limits define how the robot's parts can move, which
-     falls under allowable modifications. Without this change, creatures
-     physically CANNOT generate sufficient torque or speed for climbing.
-
-================================================================================
-9. MOTOR FREQUENCY SCALE - INCREASED FOR FASTER OSCILLATION (genome.py)
-================================================================================
-
-PROBLEM: The control-freq gene had a scale of 1, meaning motor oscillation
-         frequency ranged from 0-1 Hz. This is too slow for effective
-         locomotion - creatures need faster oscillating movements to crawl
-         or walk up the mountain.
-
-CHANGES:
-| Parameter        | Old Value | New Value | Reason                            |
-|------------------|-----------|-----------|-----------------------------------|
-| control-freq     | scale: 1  | scale: 3  | Allow 0-3 Hz motor oscillation    |
-
-CODE (genome.py, get_gene_spec method):
-    "control-freq":{"scale":3}  # Was {"scale":1}
-
-WHY: Higher frequency oscillation enables faster leg/limb movements. Combined
-     with the increased joint velocity limit (5 rad/s), creatures can now
-     evolve gaits with faster stepping patterns needed for climbing.
-
-================================================================================
-10. GENE COUNT - INCREASED FOR MORE COMPLEX BODY STRUCTURES
-================================================================================
-
-PROBLEM: With gene_count=4, creatures could only have 4 body segments maximum.
-         This limits the complexity of body plans - creatures need more parts
-         to evolve effective locomotion strategies like multiple legs or
-         articulated limbs.
-
-CHANGES:
-| File                 | Old Value | New Value | Reason                         |
-|----------------------|-----------|-----------|--------------------------------|
-| test_ga_mountain.py  | 4         | 6         | More body segments for climbing|
-| test_ga.py           | 4         | 6         | Consistent with main GA        |
-| test_ga_no_threads.py| 3         | 6         | Consistent with main GA        |
-
-CODE (test_ga_mountain.py, test_ga.py, test_ga_no_threads.py):
-    pop = population.Population(pop_size=15, gene_count=6)  # Was 4 or 3
-
-WHY: More genes allow creatures to evolve more complex body plans with
-     additional limbs or segments. This increases the search space but also
-     enables more sophisticated locomotion strategies. 6 parts can form
-     body + 5 limbs (like a starfish) or body + 2 arms + 2 legs + tail.
-
-================================================================================
-11. LINK SHAPES - IMPLEMENTED SHAPE VARIATION (cylinder, sphere, box)
-================================================================================
-
-PROBLEM: The `link-shape` gene was defined in the gene spec but NEVER USED.
-         All body parts were always cylinders regardless of the gene value.
-         This prevented creatures from evolving different body part shapes
-         that might be better suited for climbing (e.g., spheres for rolling,
-         boxes for grip).
-
-CHANGES:
-| Component          | Old Behavior           | New Behavior                    |
-|--------------------|------------------------|---------------------------------|
-| link-shape gene    | Defined but ignored    | Now determines shape type       |
-| Shape selection    | Always cylinder        | 0-0.33: cylinder, 0.33-0.66: sphere, 0.66-1.0: box |
-| URDFLink.__init__  | No link_shape param    | Added link_shape parameter      |
-| genome_to_links    | No link-shape passed   | Now passes link-shape to URDFLink |
-| to_link_element    | Only creates cylinders | Creates cylinder/sphere/box     |
-| Inertia calc       | Cylinder formula only  | Proper formulas for each shape  |
-
-CODE (genome.py):
-
-1. URDFLink.__init__ now accepts link_shape parameter:
-    def __init__(self, name, parent_name, recur,
-                link_shape=0.1,  # NEW
-                link_length=0.1,
-                ...
-
-2. genome_to_links passes link-shape gene:
-    link = URDFLink(name=link_name,
-                    parent_name=parent_name,
-                    recur=recur,
-                    link_shape=gdict["link-shape"],  # NEW
-                    ...
-
-3. to_link_element creates different shapes:
-    if self.link_shape <= 0.33:
-        # Cylinder
-        shape_tag = adom.createElement("cylinder")
-    elif self.link_shape <= 0.66:
-        # Sphere
-        shape_tag = adom.createElement("sphere")
-    else:
-        # Box
-        shape_tag = adom.createElement("box")
-
-4. Inertia calculated correctly for each shape type:
-    - Cylinder: Ixx = (1/12) * m * (3*r^2 + h^2)
-    - Sphere:   Ixx = Iyy = Izz = (2/5) * m * r^2
-    - Box:      Proper cuboid inertia formulas
-
-WHY: Different shapes provide different locomotion advantages:
-     - Cylinders: Good for rolling, standard limb shape
-     - Spheres: Can roll in any direction, good for feet/joints
-     - Boxes: More surface area for grip, stable base
-
-     The PDF allows modifications to "shape of the parts of the robot".
-     This enables the GA to explore a much richer morphology space.
-
-================================================================================
-12. SPAWN HEIGHT FIX - CREATURES NOW SPAWN ON MOUNTAIN SURFACE (simulation.py)
-================================================================================
-
-PROBLEM: Creatures were spawning at z=3, but the mountain surface at x=5 is
-         only at z≈0.25 (calculated from Gaussian formula). This meant
-         creatures were FALLING 2.75 UNITS at the start of every simulation,
-         causing them to crash/flip before they could even attempt to move.
-
-         This explains why creatures weren't climbing - they were damaged
-         at spawn.
-
-CHANGES:
-| Parameter      | Old Value     | New Value                           |
-|----------------|---------------|-------------------------------------|
-| spawn_x        | 5.0           | 3.0 (closer to peak)                |
-| spawn_z        | 3.0 (fixed)   | surface_z + 0.5 (calculated)        |
-| initial_dist   | 5.0 (fixed)   | sqrt(x² + y²) (calculated)          |
-
-CODE (simulation.py, run_creature method):
-    spawn_x = 3.0
-    spawn_y = 0.0
-    surface_z = 5.0 * math.exp(-(spawn_x**2 + spawn_y**2) / 18.0) - 1.0
-    spawn_z = surface_z + 0.5  # 0.5 units above surface
-    cr.initial_distance_to_peak = math.sqrt(spawn_x**2 + spawn_y**2)
-
-WHY: Creatures must start on the mountain surface to have any chance of
-     climbing. The Gaussian formula matches the mountain shape in
-     gaussian_pyramid.urdf. Spawning closer (x=3) gives creatures a better
-     starting position on the slope.
-
-================================================================================
-13. MOTOR AMPLITUDE - NOW USES CONTROL_AMP GENE (creature.py)
-================================================================================
-
-PROBLEM: Motor amplitude was hardcoded to 1.0, ignoring the control_amp gene.
-         This meant all motors had identical strength, preventing evolution
-         from tuning motor power for different limbs.
-
-CHANGES:
-| Parameter      | Old Value              | New Value                      |
-|----------------|------------------------|--------------------------------|
-| self.amp       | 1.0 (hardcoded)        | 0.5 + (control_amp * 4.0)      |
-| Range          | Always 1.0             | 0.5 to 1.5                     |
-
-CODE (creature.py, Motor.__init__):
-    self.amp = 0.5 + (control_amp * 4.0)  # control_amp is 0-0.25 after scaling
-
-WHY: Different limbs may need different motor strengths. Legs pushing against
-     ground may need more power than arms. This allows evolution to optimize
-     motor strength per joint.
-
-================================================================================
-14. MOVEMENT BONUS - INCREASED TO REWARD LOCOMOTION (creature.py)
-================================================================================
-
-PROBLEM: Movement bonus was capped at 1.5 with 0.3x multiplier, while progress
-         toward peak was weighted 2.5x. This meant:
-         - Moving 0.6 units toward peak = 1.5 fitness
-         - Moving 5+ units in any direction = 1.5 fitness (capped)
-
-         Creatures weren't incentivized to develop real locomotion.
-
-CHANGES:
-| Parameter      | Old Value | New Value | Reason                           |
-|----------------|-----------|-----------|----------------------------------|
-| Multiplier     | 0.3       | 0.5       | More reward per unit moved       |
-| Cap            | 1.5       | 3.0       | Higher ceiling for movers        |
-
-CODE (creature.py, get_climbing_fitness):
-    movement_bonus = min(distance_moved * 0.5, 3.0)  # Was 0.3, 1.5
-
-WHY: To evolve locomotion, creatures need strong incentive to MOVE. The higher
-     cap (3.0) means creatures that develop walking/rolling gaits are rewarded
-     more than stationary creatures. Combined with progress reward, this
-     encourages movement toward the peak.
-
-================================================================================
-15. SELECTION PRESSURE - ADDED MINIMUM FITNESS FLOOR (population.py)
-================================================================================
-
-PROBLEM: When all creatures have near-zero fitness (common in early generations
-         when no creature has figured out how to move), roulette wheel selection
-         becomes essentially RANDOM. This stalls evolution because:
-         - fitmap[-1] ≈ 0 when all fitness ≈ 0
-         - r * fitmap[-1] ≈ 0 for any random r
-         - Selection becomes arbitrary
-
-CHANGES:
-| Parameter      | Old Value | New Value | Reason                           |
-|----------------|-----------|-----------|----------------------------------|
-| min_fitness    | 0         | 0.1       | Ensures meaningful selection     |
-
-CODE (population.py, get_fitness_map):
-    def get_fitness_map(fits, min_fitness=0.1):
-        for f in fits:
-            adjusted_f = f + min_fitness
-            total = total + adjusted_f
-            fitmap.append(total)
-
-WHY: Adding 0.1 to each fitness ensures:
-     1. Even with all zeros, selection still works (uniform but not random)
-     2. Small fitness differences still matter (0.1 vs 0.2 = 33% vs 67%)
-     3. Creatures with any positive fitness get proportionally selected
-     4. Prevents division-by-zero-like behavior in selection
-
-================================================================================
-16. CREATURE MORPHOLOGY - VISIBLE EXTENDED LIMBS (genome.py)
-================================================================================
-
-PROBLEM: After 800 generations, creatures evolved as single rectangular boxes
-         with NO visible limbs. Fitness remained at 0 because creatures had
-         no body parts to generate movement. Investigation revealed:
-
-         1. Joint offsets were only 0.1x multiplier - limbs hidden inside body
-         2. Link radius (0.65) was too large relative to length (1.3)
-         3. Link recurrence scale (2) produced only 1-3 copies
-         4. Result: All child links overlapped inside parent = blob/single box
-
-CHANGES:
-| Parameter          | Old Value | New Value | Reason                         |
-|--------------------|-----------|-----------|--------------------------------|
-| link-length scale  | 1.3       | 2         | Longer, more visible limbs     |
-| link-radius scale  | 0.65      | 0.4       | Thinner limbs, less overlap    |
-| link-recurrence    | 2         | 4         | More limbs (1-5 per gene)      |
-| joint xyz offset   | 0.1x      | 0.5x      | Limbs extend further from body |
-
-CODE (genome.py):
-
-1. Gene spec changes (get_gene_spec):
-    "link-length": {"scale":2},      # Was 1.3
-    "link-radius": {"scale":0.4},    # Was 0.65
-    "link-recurrence": {"scale":4},  # Was 2
-
-2. Joint origin offset changes (to_joint_element):
-    xyz_1 = self.joint_origin_xyz_1 * 0.5  # Was 0.1
-    xyz_2 = self.joint_origin_xyz_2 * 0.5  # Was 0.1
-    xyz_3 = parent_len * 0.5 + self.joint_origin_xyz_3 * 0.5  # Was 0.1
-
-WHY: Creatures need VISIBLE, EXTENDED limbs to generate locomotion:
-     - Longer limbs (scale 2) can reach the ground and push
-     - Thinner limbs (scale 0.4) don't overlap/hide inside each other
-     - More recurrence (scale 4) creates more limbs for locomotion
-     - Larger joint offsets (0.5x) ensure limbs extend outward from body
-
-     Without these changes, creatures were evolving as single blobs with
-     all limbs hidden inside - unable to move no matter how good the
-     fitness function or motor settings.
-
-================================================================================
-17. PHYSICS ERROR HANDLING - GRACEFUL FAILURE FOR UNSTABLE CREATURES
-================================================================================
-
-PROBLEM: With increased limb sizes and recurrence, some creatures generate
-         physically unstable configurations that cause PyBullet to "explode"
-         them - destroying the physics body mid-simulation. This caused:
-
-         pybullet.error: GetBasePositionAndOrientation failed.
-
-         The error crashed the entire GA run instead of just penalizing
-         the unstable creature.
-
-CHANGES:
-| Location              | Change                                          |
-|-----------------------|-------------------------------------------------|
-| URDF loading          | Wrapped in try-except, return early on failure  |
-| Simulation loop       | Wrapped in try-except, use spawn pos on failure |
-| Creature fitness      | Unstable creatures get ~0 fitness (spawn pos)   |
-
-CODE (simulation.py, run_creature):
-    try:
-        cid = p.loadURDF(xml_file, physicsClientId=pid)
-    except Exception as e:
-        cr.update_final_position((0, 0, 0))
-        return
-
-    try:
-        for step in range(480, iterations):
-            # ... simulation loop ...
-    except Exception as e:
-        cr.update_final_position((spawn_x, spawn_y, spawn_z))
-
-WHY: Evolution naturally produces some invalid/unstable creature designs.
-     Rather than crashing, we let these creatures get 0 fitness and be
-     selected against. This is actually beneficial - the GA will learn
-     to avoid unstable configurations over generations.
-
-================================================================================
-18. SIBLING LIMB SPREADING - PREVENT OVERLAPPING LIMBS (genome.py)
-================================================================================
-
-PROBLEM: With link-recurrence=4, up to 5 copies of each limb can be created.
-         All these siblings were attaching at the EXACT SAME XYZ position:
-
-         Before:
-           xyz_1 = self.joint_origin_xyz_1 * 0.5  # Same for ALL siblings
-           xyz_2 = self.joint_origin_xyz_2 * 0.5  # Same for ALL siblings
-
-         Only rotation (RPY) varied by sibling_ind, causing all limbs to
-         originate from the same point and overlap heavily - creating a
-         blob instead of spread-out functional limbs.
-
-CHANGES:
-| Parameter      | Old Behavior              | New Behavior                    |
-|----------------|---------------------------|--------------------------------|
-| xyz_1 (X pos)  | Fixed per gene            | Varies by sibling_ind (+0.2)   |
-| xyz_2 (Y pos)  | Fixed per gene            | Varies by sibling_ind (-0.2)   |
-| xyz_3 (Z pos)  | 0.5x offset               | 0.3x offset (reduce overlap)   |
-
-CODE (genome.py, to_joint_element):
-    spread_factor = (self.sibling_ind - 1) * 0.2
-    xyz_1 = self.joint_origin_xyz_1 * 0.5 + spread_factor
-    xyz_2 = self.joint_origin_xyz_2 * 0.5 - spread_factor
-    xyz_3 = parent_len * 0.5 + self.joint_origin_xyz_3 * 0.3
-
-WHY: Siblings now attach at different positions around the parent:
-     - Sibling 1: offset (0, 0)
-     - Sibling 2: offset (+0.2, -0.2)
-     - Sibling 3: offset (+0.4, -0.4)
-     - etc.
-
-     Combined with rotation spreading (RPY * sibling_ind), this creates
-     limbs that extend outward in different directions rather than all
-     clustering at the same point.
-
-================================================================================
-19. MAJOR SIMPLIFICATION - OPTIMIZED FOR CLIMBING (Multiple Files)
-================================================================================
-
-PROBLEM: Creatures were evolving as complex blobs with too many overlapping
-         parts. The complexity was hindering evolution rather than helping.
-         Based on PDF guidance, simplified the system to focus on functional
-         locomotion.
-
-CHANGES OVERVIEW:
-| # | Change                        | File(s)              | Old → New           |
-|---|-------------------------------|----------------------|---------------------|
-| 1 | Reduce link-recurrence        | genome.py            | 4 → 2               |
-| 2 | Reduce gene_count             | test_ga*.py          | 6 → 4               |
-| 3 | Use cylinders only            | genome.py            | 3 shapes → cylinder |
-| 4 | Increase motor force          | simulation.py        | 12 → 20             |
-| 5 | Simplify fitness              | creature.py          | Complex → Height    |
-
-DETAILED CHANGES:
-
-1. LINK RECURRENCE (genome.py):
-   "link-recurrence": {"scale":2}  # Was 4
-   - Now creates 1-3 limbs per gene instead of 1-5
-   - Fewer overlapping parts, cleaner structures
-
-2. GENE COUNT (test_ga_mountain.py, test_ga.py, test_ga_no_threads.py):
-   gene_count=4  # Was 6
-   - Simpler creatures with 4 body segments max
-   - Faster evolution, less complexity
-
-3. CYLINDERS ONLY (genome.py, to_link_element):
-   - Removed sphere and box shapes
-   - All body parts are now cylinders
-   - Cylinders work better for leg-like locomotion
-   - Simplified inertia calculation
-
-4. MOTOR FORCE (simulation.py, update_motors):
-   force=20  # Was 12
-   - More powerful motors to move creature effectively
-   - Enables stronger pushing/climbing movements
-
-5. SIMPLIFIED FITNESS (creature.py, get_climbing_fitness):
-   OLD: fitness = (progress * 2.5) + final_height + movement_bonus - surface_penalty
-   NEW: fitness = (final_height * 3.0) + movement_bonus
-
-   - Primary focus: HEIGHT (as PDF says "get as high as possible")
-   - Secondary: Small movement bonus (cap 1.0)
-   - Removed complex progress/surface calculations
-   - Clear evolutionary pressure toward climbing
-
-WHY THESE CHANGES:
-   The PDF explicitly says "get as high as possible up the mountain".
-   Complex creatures with many overlapping parts were:
-   - Physically unstable (causing physics explosions)
-   - Not developing functional locomotion
-   - Gaming the fitness function without actually climbing
-
-   Simpler creatures with clear height-based fitness should:
-   - Evolve more stable body plans
-   - Develop actual climbing behavior
-   - Converge faster on functional solutions
-
-================================================================================
-20. SPAWN POSITION - MOVED CLOSER TO PEAK (simulation.py)
-================================================================================
-
-PROBLEM: Creatures were spawning at x=3.0, where the mountain slope is gentle.
-         The Gaussian formula shows:
-         - At x=3: height ≈ 0.6 (gentle slope, little climbing gradient)
-         - At x=1.5: height ≈ 2.8 (steep slope, strong climbing gradient)
-
-         Creatures had to traverse flat terrain before reaching meaningful slopes,
-         making the climbing task unnecessarily difficult.
-
-CHANGES:
-| Parameter  | Old Value | New Value | Reason                              |
-|------------|-----------|-----------|-------------------------------------|
-| spawn_x    | 3.0       | 1.5       | Spawn on steeper part of mountain   |
-
-CODE (simulation.py, run_creature):
-    spawn_x = 1.5  # Was 3.0
-
-WHY: Spawning on the steeper part of the mountain provides:
-     - Clearer fitness gradient (small movements = noticeable height gain)
-     - Less wasted time traversing flat terrain
-     - Better signal for evolution to optimize toward climbing
-
-================================================================================
-21. POPULATION SIZE - INCREASED FOR BETTER EXPLORATION (test_ga_mountain.py)
-================================================================================
-
-PROBLEM: Population of 15 was too small to explore the complex search space.
-         With 4 genes × 17 parameters per gene, the search space is enormous.
-         Small populations lead to:
-         - Premature convergence to local optima
-         - Limited genetic diversity
-         - Rare chance of finding working body plans
-
-CHANGES:
-| Parameter  | Old Value | New Value | Reason                              |
-|------------|-----------|-----------|-------------------------------------|
-| pop_size   | 15        | 30        | Double the population diversity     |
-
-CODE (test_ga_mountain.py):
-    pop = population.Population(pop_size=30, gene_count=4)  # Was 15
-
-WHY: Larger population provides:
-     - More genetic diversity per generation
-     - Better exploration of the search space
-     - Higher probability of discovering functional body plans
-     - More robust evolution against premature convergence
-
-================================================================================
-22. JOINT ATTACHMENT - PREVENT LIMB OVERLAP (genome.py)
-================================================================================
-
-PROBLEM: Child limbs were clipping through parent bodies. The Z-offset
-         calculation only considered parent length:
-
-         OLD: xyz_3 = parent_len * 0.5 + xyz_3_gene * 0.3
-
-         This placed the joint at the parent's endpoint, but the child cylinder
-         extends in BOTH directions from the joint. Half the child would be
-         inside the parent body, causing physics issues and visual overlap.
-
-CHANGES:
-| Parameter  | Old Formula                           | New Formula                                    |
-|------------|---------------------------------------|------------------------------------------------|
-| xyz_3      | parent_len/2 + gene*0.3               | parent_len/2 + child_len/2 + gene*0.2          |
-
-CODE (genome.py, to_joint_element):
-    parent_len = max(self.parent_link_length, 0.1)
-    child_len = max(self.link_length, 0.1)  # NEW: Account for child length
-    xyz_3 = (parent_len / 2) + (child_len / 2) + self.joint_origin_xyz_3 * 0.2
-
-WHY: The new formula ensures:
-     - Child limb starts exactly at parent's endpoint (parent_len/2)
-     - Child limb extends outward, not into parent (child_len/2)
-     - Small random offset for variation (gene * 0.2)
-     - No physical overlap between parent and child bodies
-     - More stable physics simulation
-     - Cleaner, more functional creature morphologies
-
-================================================================================
-23. JOINT POSITIONING FIX - PREVENT FLOATING LIMBS (genome.py)
-================================================================================
-
-PROBLEM: The previous fix (change 22) added child_len/2 to the joint offset,
-         which created gaps between parent and child limbs. With link-length
-         scale of 2, child_len could be up to 2.0, so child_len/2 = 1.0.
-         This placed joints very far from parents, making limbs appear detached.
-
-         OLD: xyz_3 = parent_len/2 + child_len/2 + gene*0.2  (up to 2.2 offset!)
-
-CHANGES:
-| Parameter      | Old Value                  | New Value                     |
-|----------------|----------------------------|-------------------------------|
-| xyz_3          | parent/2 + child/2 + 0.2   | parent/2 + 0.05 + gene*0.1    |
-| xyz_1/xyz_2    | gene * 0.5                 | gene * 0.3                    |
-| spread_factor  | (sibling-1) * 0.2          | (sibling-1) * 0.1             |
-
-CODE (genome.py, to_joint_element):
-    spread_factor = (self.sibling_ind - 1) * 0.1  # Was 0.2
-    xyz_1 = self.joint_origin_xyz_1 * 0.3 + spread_factor  # Was 0.5
-    xyz_2 = self.joint_origin_xyz_2 * 0.3 - spread_factor  # Was 0.5
-    xyz_3 = (parent_len / 2) + 0.05 + self.joint_origin_xyz_3 * 0.1
-
-WHY: The new formula:
-     - Places joint at parent's tip (parent_len/2) with tiny 0.05 offset
-     - Child is centered on joint (some visual overlap is fine - connected)
-     - Reduced X/Y spread keeps siblings visually connected
-     - Maximum Z offset is now ~0.15 instead of ~2.2
-     - Limbs stay visually attached to their parents

@@ -1,16 +1,79 @@
 import numpy as np
-import copy 
+import copy
 import random
 
 class Genome():
-    @staticmethod 
+    @staticmethod
     def get_random_gene(length):
         gene = np.array([np.random.random() for i in range(length)])
         return gene
-    
-    @staticmethod 
+
+    @staticmethod
     def get_random_genome(gene_length, gene_count):
         genome = [Genome.get_random_gene(gene_length) for i in range(gene_count)]
+        return genome
+
+    @staticmethod
+    def get_fixed_walker_genome(gene_length):
+        """
+        Create a fixed walker body structure with random motor control genes.
+
+        This implements the PDF suggestion: "start with a fixed design robot,
+        and just evolve the motor control parameters"
+
+        Body plan:
+        - Gene 0: Body (horizontal cylinder as base)
+        - Gene 1: Legs (4 legs via recurrence, angled outward)
+
+        Only control genes (indices 14-16) are randomized.
+        Morphology genes (indices 0-13) are fixed for a functional walker.
+        """
+        genome = []
+
+        # Gene 0: Body (root link)
+        body_gene = np.zeros(gene_length)
+        body_gene[0] = 0.5   # link-shape: cylinder
+        body_gene[1] = 0.25  # link-length: 0.25 * 2 = 0.5 (short, wide body)
+        body_gene[2] = 0.6   # link-radius: 0.6 * 0.4 = 0.24 (wider body)
+        body_gene[3] = 0.0   # link-recurrence: 0 (no copies of body)
+        body_gene[4] = 0.5   # link-mass: moderate
+        body_gene[5] = 0.5   # joint-type: doesn't matter for root
+        body_gene[6] = 0.0   # joint-parent: root has no parent
+        body_gene[7] = 0.5   # joint-axis-xyz
+        body_gene[8] = 0.0   # joint-origin-rpy-1
+        body_gene[9] = 0.0   # joint-origin-rpy-2
+        body_gene[10] = 0.0  # joint-origin-rpy-3
+        body_gene[11] = 0.0  # joint-origin-xyz-1
+        body_gene[12] = 0.0  # joint-origin-xyz-2
+        body_gene[13] = 0.0  # joint-origin-xyz-3
+        # Control genes - randomized for evolution
+        body_gene[14] = np.random.random()  # control-waveform
+        body_gene[15] = np.random.random()  # control-amp
+        body_gene[16] = np.random.random()  # control-freq
+        genome.append(body_gene)
+
+        # Gene 1: Legs (attached to body)
+        leg_gene = np.zeros(gene_length)
+        leg_gene[0] = 0.5    # link-shape: cylinder
+        leg_gene[1] = 0.35   # link-length: 0.35 * 2 = 0.7 (longer legs to reach ground)
+        leg_gene[2] = 0.2    # link-radius: 0.2 * 0.4 = 0.08 (thin legs)
+        leg_gene[3] = 1.0    # link-recurrence: 1.0 * 2 = 2, int(2)+1 = 3 legs
+        leg_gene[4] = 0.3    # link-mass: lighter legs
+        leg_gene[5] = 0.5    # joint-type: revolute
+        leg_gene[6] = 0.0    # joint-parent: attached to body (gene 0)
+        leg_gene[7] = 0.5    # joint-axis-xyz: Y-axis rotation (for walking motion)
+        leg_gene[8] = 0.25   # joint-origin-rpy-1: π/2 base rotation (spread by sibling_ind)
+        leg_gene[9] = 0.25   # joint-origin-rpy-2: angle legs outward
+        leg_gene[10] = 0.0   # joint-origin-rpy-3
+        leg_gene[11] = 0.5   # joint-origin-xyz-1: offset from body center
+        leg_gene[12] = 0.5   # joint-origin-xyz-2: offset from body center
+        leg_gene[13] = 0.0   # joint-origin-xyz-3: at body's edge
+        # Control genes - randomized for evolution
+        leg_gene[14] = np.random.random()  # control-waveform
+        leg_gene[15] = np.random.random()  # control-amp
+        leg_gene[16] = np.random.random()  # control-freq
+        genome.append(leg_gene)
+
         return genome
 
     @staticmethod
@@ -140,6 +203,59 @@ class Genome():
                 if gene[i] < 0.0:
                     gene[i] = 0.0
         return new_genome
+
+    @staticmethod
+    def point_mutate_control_only(genome, rate, amount):
+        """
+        Mutate ONLY the motor control genes (indices 14, 15, 16).
+        Preserves body morphology while evolving motor patterns.
+
+        This implements the PDF suggestion to evolve only motor control
+        while keeping body structure fixed.
+
+        Control genes:
+        - Index 14: control-waveform (pulse vs sine)
+        - Index 15: control-amp (motor amplitude)
+        - Index 16: control-freq (motor frequency)
+        """
+        # Control gene indices
+        CONTROL_INDICES = [14, 15, 16]
+
+        # Deep copy to prevent corruption of parent DNA
+        new_genome = [gene.copy() for gene in genome]
+        for gene in new_genome:
+            for i in CONTROL_INDICES:
+                if i < len(gene) and random.random() < rate:
+                    # Bidirectional mutation using the amount parameter
+                    gene[i] += random.uniform(-amount, amount)
+                    # Clamp to valid range [0, 1)
+                    if gene[i] >= 1.0:
+                        gene[i] = 0.9999
+                    if gene[i] < 0.0:
+                        gene[i] = 0.0
+        return new_genome
+
+    @staticmethod
+    def crossover_control_only(g1, g2):
+        """
+        Crossover that only exchanges control genes, preserving body structure.
+        Takes body from g1 and randomly mixes control genes from both parents.
+        """
+        # Deep copy g1's structure (preserve morphology)
+        g3 = [gene.copy() for gene in g1]
+
+        # Control gene indices
+        CONTROL_INDICES = [14, 15, 16]
+
+        # For each gene, randomly take control values from either parent
+        for gene_idx in range(min(len(g1), len(g2))):
+            for ctrl_idx in CONTROL_INDICES:
+                if ctrl_idx < len(g3[gene_idx]):
+                    # 50% chance to take from parent 2
+                    if random.random() < 0.5:
+                        g3[gene_idx][ctrl_idx] = g2[gene_idx][ctrl_idx]
+
+        return g3
 
     @staticmethod
     def shrink_mutate(genome, rate):
