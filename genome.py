@@ -22,19 +22,27 @@ class Genome():
         and just evolve the motor control parameters"
 
         Body plan:
-        - Gene 0: Body (horizontal cylinder as base)
-        - Gene 1: Legs (4 legs via recurrence, angled DOWNWARD to touch ground)
+        - Gene 0: Body (SPHERE as stable central mass)
+        - Gene 1: Legs (CYLINDER legs via recurrence, angled DOWNWARD)
+
+        The walker seed provides SHAPE VARIETY from the start:
+        - Spherical body for stability and rolling
+        - Cylindrical legs for locomotion
 
         Only control genes (indices 14-16) are randomized.
         Morphology genes (indices 0-13) are fixed for a functional walker.
+
+        NOTE: Gene scales are:
+        - link-length: scale 0.8 (max 0.8 units)
+        - link-radius: scale 0.2 (max 0.2 units)
         """
         genome = []
 
-        # Gene 0: Body (root link)
+        # Gene 0: Body (root link) - SPHERE for stable central mass
         body_gene = np.zeros(gene_length)
-        body_gene[0] = 0.5   # link-shape: cylinder
-        body_gene[1] = 0.2   # link-length: 0.2 * 2 = 0.4 (compact body)
-        body_gene[2] = 0.5   # link-radius: 0.5 * 0.4 = 0.2 (wide body for stability)
+        body_gene[0] = 0.5   # link-shape: 0.5 = SPHERE (0.33-0.66 range)
+        body_gene[1] = 0.5   # link-length: 0.5 * 0.8 = 0.4 (affects sphere radius)
+        body_gene[2] = 0.8   # link-radius: 0.8 * 0.2 = 0.16 (sphere radius ~0.28)
         body_gene[3] = 0.0   # link-recurrence: 0 (no copies of body)
         body_gene[4] = 0.5   # link-mass: moderate
         body_gene[5] = 0.5   # joint-type: doesn't matter for root
@@ -52,11 +60,11 @@ class Genome():
         body_gene[16] = np.random.random()  # control-freq
         genome.append(body_gene)
 
-        # Gene 1: Legs (attached to body, pointing DOWNWARD)
+        # Gene 1: Legs (attached to body, pointing DOWNWARD) - CYLINDER
         leg_gene = np.zeros(gene_length)
-        leg_gene[0] = 0.5    # link-shape: cylinder
-        leg_gene[1] = 0.4    # link-length: 0.4 * 2 = 0.8 (long legs to reach ground)
-        leg_gene[2] = 0.15   # link-radius: 0.15 * 0.4 = 0.06 (thin legs)
+        leg_gene[0] = 0.2    # link-shape: 0.2 = CYLINDER (0-0.33 range)
+        leg_gene[1] = 0.75   # link-length: 0.75 * 0.8 = 0.6 (reasonable leg length)
+        leg_gene[2] = 0.3    # link-radius: 0.3 * 0.2 = 0.06 (thin legs)
         leg_gene[3] = 1.5    # link-recurrence: 1.5 * 2 = 3, int(3)+1 = 4 legs
         leg_gene[4] = 0.2    # link-mass: light legs
         leg_gene[5] = 0.5    # joint-type: revolute
@@ -81,10 +89,10 @@ class Genome():
 
     @staticmethod
     def get_gene_spec():
-        gene_spec =  {"link-shape":{"scale":1},
-            "link-length": {"scale":2},  # Increased for longer, more visible limbs
-            "link-radius": {"scale":0.4},  # Reduced for thinner limbs (less overlap)
-            "link-recurrence": {"scale":2},  # Reduced for simpler creatures (was 4)
+        gene_spec =  {"link-shape":{"scale":1},  # 0-0.33=cylinder, 0.33-0.66=sphere, 0.66-1=box
+            "link-length": {"scale":0.8},  # Max 0.8 units - reasonable limb size
+            "link-radius": {"scale":0.2},  # Max 0.2 units - prevents huge bulky limbs
+            "link-recurrence": {"scale":2},  # Max 2 recurrences (3 copies)
             "link-mass": {"scale":1},
             "joint-type": {"scale":1},
             "joint-parent":{"scale":1},
@@ -408,13 +416,47 @@ class URDFLink:
         vis_tag = adom.createElement("visual")
         geom_tag = adom.createElement("geometry")
 
-        # Use cylinders only - simpler, more predictable limb structures
-        # Cylinders work better for leg-like locomotion than spheres/boxes
-        shape_tag = adom.createElement("cylinder")
-        shape_tag.setAttribute("length", str(actual_length))
-        shape_tag.setAttribute("radius", str(actual_radius))
-        # Mass = density * volume = pi * r^2 * height
-        mass = np.pi * (actual_radius * actual_radius) * actual_length
+        # SHAPE VARIATION: Use link_shape gene to determine shape type
+        # This allows evolution to discover optimal shapes for climbing
+        # 0.0-0.33 = cylinder, 0.33-0.66 = sphere, 0.66-1.0 = box
+        if self.link_shape <= 0.33:
+            # CYLINDER - good for legs, elongated limbs
+            shape_tag = adom.createElement("cylinder")
+            shape_tag.setAttribute("length", str(actual_length))
+            shape_tag.setAttribute("radius", str(actual_radius))
+            # Mass = density * volume = pi * r^2 * height
+            mass = np.pi * (actual_radius * actual_radius) * actual_length
+            # Cylinder inertia
+            ixx = (1.0/12.0) * mass * (3 * actual_radius * actual_radius + actual_length * actual_length)
+            iyy = ixx
+            izz = (1.0/2.0) * mass * actual_radius * actual_radius
+        elif self.link_shape <= 0.66:
+            # SPHERE - good for body, joints, rounded parts
+            shape_tag = adom.createElement("sphere")
+            # Sphere radius based on average of length and radius genes
+            sphere_radius = (actual_length + actual_radius) / 2
+            sphere_radius = max(sphere_radius, min_radius)
+            shape_tag.setAttribute("radius", str(sphere_radius))
+            # Mass = (4/3) * pi * r^3
+            mass = (4.0/3.0) * np.pi * (sphere_radius ** 3)
+            # Sphere inertia: I = (2/5) * m * r^2
+            ixx = (2.0/5.0) * mass * sphere_radius * sphere_radius
+            iyy = ixx
+            izz = ixx
+        else:
+            # BOX - good for flat feet, paddles, stable bases
+            shape_tag = adom.createElement("box")
+            # Box dimensions: length x width x height
+            box_x = actual_length
+            box_y = actual_radius * 2  # Width based on radius
+            box_z = actual_radius      # Height based on radius
+            shape_tag.setAttribute("size", f"{box_x} {box_y} {box_z}")
+            # Mass = density * volume = x * y * z
+            mass = box_x * box_y * box_z
+            # Box inertia
+            ixx = (1.0/12.0) * mass * (box_y * box_y + box_z * box_z)
+            iyy = (1.0/12.0) * mass * (box_x * box_x + box_z * box_z)
+            izz = (1.0/12.0) * mass * (box_x * box_x + box_y * box_y)
 
         geom_tag.appendChild(shape_tag)
         vis_tag.appendChild(geom_tag)
@@ -422,10 +464,22 @@ class URDFLink:
         coll_tag = adom.createElement("collision")
         c_geom_tag = adom.createElement("geometry")
 
-        # Collision shape (same cylinder)
-        c_shape_tag = adom.createElement("cylinder")
-        c_shape_tag.setAttribute("length", str(actual_length))
-        c_shape_tag.setAttribute("radius", str(actual_radius))
+        # Collision shape (same as visual)
+        if self.link_shape <= 0.33:
+            c_shape_tag = adom.createElement("cylinder")
+            c_shape_tag.setAttribute("length", str(actual_length))
+            c_shape_tag.setAttribute("radius", str(actual_radius))
+        elif self.link_shape <= 0.66:
+            c_shape_tag = adom.createElement("sphere")
+            sphere_radius = (actual_length + actual_radius) / 2
+            sphere_radius = max(sphere_radius, min_radius)
+            c_shape_tag.setAttribute("radius", str(sphere_radius))
+        else:
+            c_shape_tag = adom.createElement("box")
+            box_x = actual_length
+            box_y = actual_radius * 2
+            box_z = actual_radius
+            c_shape_tag.setAttribute("size", f"{box_x} {box_y} {box_z}")
 
         c_geom_tag.appendChild(c_shape_tag)
         coll_tag.appendChild(c_geom_tag)
@@ -438,12 +492,7 @@ class URDFLink:
         mass_tag = adom.createElement("mass")
         mass_tag.setAttribute("value", str(mass))
         inertia_tag = adom.createElement("inertia")
-        # Cylinder inertia formula
-        # Ixx = Iyy = (1/12) * m * (3*r^2 + h^2)
-        # Izz = (1/2) * m * r^2
-        ixx = (1.0/12.0) * mass * (3 * actual_radius * actual_radius + actual_length * actual_length)
-        iyy = ixx
-        izz = (1.0/2.0) * mass * actual_radius * actual_radius
+        # Inertia values computed above based on shape type
         inertia_tag.setAttribute("ixx", str(ixx))
         inertia_tag.setAttribute("iyy", str(iyy))
         inertia_tag.setAttribute("izz", str(izz))

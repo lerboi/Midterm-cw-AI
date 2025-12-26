@@ -30,50 +30,107 @@ ROOT CAUSE: Starting from completely RANDOM genomes, most creatures are
             fitness gradient for evolution to follow.
 
 ================================================================================
-CURRENT APPROACH: SEEDED EVOLUTION WITH FULL MORPHOLOGY CHANGE
+CURRENT APPROACH: SEEDED EVOLUTION WITH FULL MORPHOLOGY + SHAPE VARIETY
 ================================================================================
 
-Following PDF guidance, we now use a SEEDED approach:
+Following PDF guidance, we now use a SEEDED approach with SHAPE VARIATION:
 1. Initial population starts with a reasonable WALKER DESIGN (not random)
 2. FULL EVOLUTION is enabled - shape CAN and WILL change over generations
 3. The walker is just a STARTING POINT, not a constraint
+4. THREE SHAPE TYPES available: cylinders, spheres, and boxes
+5. Limb sizes are constrained to reasonable values
 
 This gives evolution a head start with functional bodies, while still
 allowing creatures to evolve toward optimal climbing shapes.
 
 ================================================================================
-1. WALKER SEED GENOME (genome.py)
+1. SHAPE VARIATION SYSTEM (genome.py)
 ================================================================================
 
-IMPLEMENTATION: Added get_fixed_walker_genome() method
+IMPLEMENTATION: Restored full shape variation in to_link_element()
 
-Creates a reasonable walker body as SEED for initial population:
-- Gene 0: Body (horizontal cylinder, compact and stable)
-- Gene 1: Legs (4 legs angled downward to touch ground)
+The link_shape gene (index 0) now controls shape type:
+- 0.00 - 0.33: CYLINDER (good for legs, elongated limbs)
+- 0.33 - 0.66: SPHERE (good for body, joints, rounded parts)
+- 0.66 - 1.00: BOX (good for flat feet, paddles, stable bases)
+
+Each shape has proper:
+- Visual geometry (for rendering)
+- Collision geometry (for physics)
+- Mass calculation based on volume
+- Inertia tensor calculation for correct physics
+
+CODE (genome.py to_link_element()):
+    if self.link_shape <= 0.33:
+        # CYLINDER
+        shape_tag = adom.createElement("cylinder")
+        shape_tag.setAttribute("length", str(actual_length))
+        shape_tag.setAttribute("radius", str(actual_radius))
+    elif self.link_shape <= 0.66:
+        # SPHERE
+        shape_tag = adom.createElement("sphere")
+        sphere_radius = (actual_length + actual_radius) / 2
+        shape_tag.setAttribute("radius", str(sphere_radius))
+    else:
+        # BOX
+        shape_tag = adom.createElement("box")
+        shape_tag.setAttribute("size", f"{box_x} {box_y} {box_z}")
+
+================================================================================
+2. REDUCED LIMB SCALES (genome.py)
+================================================================================
+
+IMPLEMENTATION: Constrained limb dimensions to prevent huge/unwieldy creatures
+
+BEFORE (too large):
+- link-length: scale 2.0 (limbs up to 2 units - massive)
+- link-radius: scale 0.4 (radius up to 0.4 - bulky)
+
+AFTER (reasonable):
+- link-length: scale 0.8 (limbs up to 0.8 units - manageable)
+- link-radius: scale 0.2 (radius up to 0.2 - slim)
+
+This prevents creatures from becoming unwieldy giants and allows for
+more nuanced evolution of body proportions.
+
+================================================================================
+3. WALKER SEED WITH SHAPE VARIETY (genome.py)
+================================================================================
+
+IMPLEMENTATION: Updated get_fixed_walker_genome() method
+
+Creates a walker that demonstrates SHAPE VARIETY from the start:
+- Gene 0: Body - SPHERE (stable central mass, good for rolling)
+- Gene 1: Legs - CYLINDER (4 legs angled downward for locomotion)
 
 This is NOT a constraint - just a starting point. The genome WILL change
-through evolution via crossover and mutation.
+through evolution via crossover and mutation. Shapes CAN evolve to
+cylinders, spheres, or boxes as evolution discovers what works best.
 
 KEY DESIGN FEATURES:
-- Body: length 0.4, radius 0.2 (compact, stable base)
-- Legs: length 0.8, 4 legs via recurrence
+- Body: SPHERE (radius ~0.28, stable center of mass)
+- Legs: CYLINDER (length 0.6, thin radius 0.06)
+- 4 legs via recurrence
 - Leg angle: 135° pitch to point DOWNWARD toward ground
 - Joint axis: X-axis rotation for forward/backward leg swing
 
 CODE (genome.py):
     @staticmethod
     def get_fixed_walker_genome(gene_length):
-        # Body gene - compact cylinder
-        body_gene[1] = 0.2   # length 0.4
-        body_gene[2] = 0.5   # radius 0.2
+        # Body gene - SPHERE
+        body_gene[0] = 0.5   # link-shape: SPHERE (0.33-0.66 range)
+        body_gene[1] = 0.5   # link-length: 0.4 (for sphere radius)
+        body_gene[2] = 0.8   # link-radius: 0.16 (sphere radius ~0.28)
 
-        # Leg gene - angled downward
-        leg_gene[1] = 0.4    # length 0.8
+        # Leg gene - CYLINDER
+        leg_gene[0] = 0.2    # link-shape: CYLINDER (0-0.33 range)
+        leg_gene[1] = 0.75   # link-length: 0.6
+        leg_gene[2] = 0.3    # link-radius: 0.06 (thin legs)
         leg_gene[3] = 1.5    # 4 legs (recurrence)
         leg_gene[9] = 0.375  # 135° angle (pointing DOWN)
 
 ================================================================================
-2. MOVEMENT-FIRST FITNESS (creature.py)
+4. MOVEMENT-FIRST FITNESS (creature.py)
 ================================================================================
 
 IMPLEMENTATION: Rewrote get_climbing_fitness() to prioritize movement
@@ -96,7 +153,7 @@ WHY: Creates a fitness gradient even for random motor patterns. Any creature
      that moves scores higher than stationary ones.
 
 ================================================================================
-3. SEEDED EVOLUTION GA LOOP (test_ga_mountain.py)
+5. SEEDED EVOLUTION GA LOOP (test_ga_mountain.py)
 ================================================================================
 
 IMPLEMENTATION: Genetic algorithm with seeded initial population
@@ -123,7 +180,7 @@ WHY: The walker seed gives evolution a HEAD START with functional bodies.
      climbing shapes. Shape WILL change over generations.
 
 ================================================================================
-4. SPAWN POSITION (simulation.py)
+6. SPAWN POSITION (simulation.py)
 ================================================================================
 
 Creatures spawn at x=1.5 on the mountain slope (steeper gradient).
@@ -149,9 +206,13 @@ FILES MODIFIED
 ================================================================================
 
 genome.py:
-  - Added get_fixed_walker_genome() - walker seed for initial population
+  - Restored SHAPE VARIATION in to_link_element(): cylinder/sphere/box
+  - Reduced link-length scale from 2.0 to 0.8 (smaller limbs)
+  - Reduced link-radius scale from 0.4 to 0.2 (thinner limbs)
+  - Updated get_fixed_walker_genome() with sphere body + cylinder legs
   - Added point_mutate_control_only() - available but not used in main GA
   - Added crossover_control_only() - available but not used in main GA
+  - Added min_genes=2 to crossover() and shrink_mutate()
 
 creature.py:
   - Modified __init__() to accept use_fixed_walker parameter
