@@ -308,27 +308,45 @@ class Creature:
 
     def get_climbing_fitness(self):
         """
-        SIMPLIFIED FITNESS - Focus on HEIGHT as per PDF requirement.
+        FITNESS FUNCTION - Designed to reward actual climbing behavior.
 
-        PDF says: "get as high as possible up the mountain"
+        Addresses PDF Part B requirement: "get as high as possible up the
+        mountain, without cheating and flying into the air"
 
-        Primary metric: Final height (z-coordinate)
-        Secondary: Small movement bonus to encourage locomotion
+        Fitness components:
+        1. Progress toward peak (horizontal movement to center) - HEAVILY weighted
+        2. Final height (vertical climbing)
+        3. Movement bonus (any displacement rewards locomotion)
+        4. Surface penalty (prevent flying/floating)
 
         Returns:
-            float: Height-focused fitness score
+            float: Combined climbing fitness score
         """
-        # PRIMARY: Final height - this is the main goal
-        # PDF explicitly says "get as high as possible"
+        # Component 1: Progress toward peak - PRIMARY REWARD
+        # PDF says "maximum closeness to the top of the mountain"
+        # Weight heavily to encourage movement toward center
+        progress = self.get_progress_toward_peak()
+
+        # Component 2: Final height relative to baseline
+        # Rewards actual vertical climbing
         final_height = self.get_final_height()
 
-        # SECONDARY: Small movement bonus to break ties and encourage locomotion
+        # Component 3: Movement bonus - reward ANY movement
+        # This encourages creatures to develop locomotion capabilities
+        # Even moving away from peak is better than standing still
         distance_moved = self.get_distance_travelled()
-        movement_bonus = min(distance_moved * 0.3, 1.0)  # Small bonus, cap at 1.0
+        movement_bonus = min(distance_moved * 0.5, 3.0)
 
-        # Simple fitness: height is king
-        # Height weighted heavily (3x) since it's the primary goal
-        fitness = (final_height * 3.0) + movement_bonus
+        # Component 4: Surface penalty - prevent flying/floating
+        height_above_surface = self.get_height_above_surface()
+        surface_penalty = max(0, height_above_surface - 0.5) * 0.5
+
+        # Combined fitness:
+        # - Progress heavily weighted (2.5x) - main goal is reaching peak
+        # - Final height (1.0x) - reward vertical climbing
+        # - Movement bonus - encourage developing locomotion
+        # - Surface penalty - prevent cheating by flying
+        fitness = (progress * 2.5) + final_height + movement_bonus - surface_penalty
 
         # Ensure non-negative fitness
         return max(0, fitness)
