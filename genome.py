@@ -16,9 +16,9 @@ class Genome():
     @staticmethod
     def get_gene_spec():
         gene_spec =  {"link-shape":{"scale":1},
-            "link-length": {"scale":1.3},  # Reduced from 2 to 1.3 (smaller creatures)
-            "link-radius": {"scale":0.65},  # Reduced from 1 to 0.65 (smaller creatures)
-            "link-recurrence": {"scale":2},  # Reduced from 3 to 2 for simpler creatures
+            "link-length": {"scale":2},  # Increased for longer, more visible limbs
+            "link-radius": {"scale":0.4},  # Reduced for thinner limbs (less overlap)
+            "link-recurrence": {"scale":4},  # Increased for more limbs per gene
             "link-mass": {"scale":1},
             "joint-type": {"scale":1},
             "joint-parent":{"scale":1},
@@ -405,9 +405,9 @@ class URDFLink:
         # Use parent's link_length (not child's) to position at parent's endpoint
         # Enforce minimum parent length for joint calculation
         parent_len = max(self.parent_link_length, 0.1)
-        xyz_1 = self.joint_origin_xyz_1 * 0.1  # Small X offset for variation
-        xyz_2 = self.joint_origin_xyz_2 * 0.1  # Small Y offset for variation
-        xyz_3 = parent_len * 0.5 + self.joint_origin_xyz_3 * 0.1  # Z = parent endpoint
+        xyz_1 = self.joint_origin_xyz_1 * 0.5  # Increased X offset for limb extension
+        xyz_2 = self.joint_origin_xyz_2 * 0.5  # Increased Y offset for limb extension
+        xyz_3 = parent_len * 0.5 + self.joint_origin_xyz_3 * 0.5  # Z = parent endpoint + offset
         xyz = str(xyz_1) + " " + str(xyz_2) + " " + str(xyz_3)
         orig_tag.setAttribute("xyz", xyz)
 

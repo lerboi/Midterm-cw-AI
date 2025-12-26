@@ -431,3 +431,46 @@ WHY: Adding 0.1 to each fitness ensures:
      2. Small fitness differences still matter (0.1 vs 0.2 = 33% vs 67%)
      3. Creatures with any positive fitness get proportionally selected
      4. Prevents division-by-zero-like behavior in selection
+
+================================================================================
+16. CREATURE MORPHOLOGY - VISIBLE EXTENDED LIMBS (genome.py)
+================================================================================
+
+PROBLEM: After 800 generations, creatures evolved as single rectangular boxes
+         with NO visible limbs. Fitness remained at 0 because creatures had
+         no body parts to generate movement. Investigation revealed:
+
+         1. Joint offsets were only 0.1x multiplier - limbs hidden inside body
+         2. Link radius (0.65) was too large relative to length (1.3)
+         3. Link recurrence scale (2) produced only 1-3 copies
+         4. Result: All child links overlapped inside parent = blob/single box
+
+CHANGES:
+| Parameter          | Old Value | New Value | Reason                         |
+|--------------------|-----------|-----------|--------------------------------|
+| link-length scale  | 1.3       | 2         | Longer, more visible limbs     |
+| link-radius scale  | 0.65      | 0.4       | Thinner limbs, less overlap    |
+| link-recurrence    | 2         | 4         | More limbs (1-5 per gene)      |
+| joint xyz offset   | 0.1x      | 0.5x      | Limbs extend further from body |
+
+CODE (genome.py):
+
+1. Gene spec changes (get_gene_spec):
+    "link-length": {"scale":2},      # Was 1.3
+    "link-radius": {"scale":0.4},    # Was 0.65
+    "link-recurrence": {"scale":4},  # Was 2
+
+2. Joint origin offset changes (to_joint_element):
+    xyz_1 = self.joint_origin_xyz_1 * 0.5  # Was 0.1
+    xyz_2 = self.joint_origin_xyz_2 * 0.5  # Was 0.1
+    xyz_3 = parent_len * 0.5 + self.joint_origin_xyz_3 * 0.5  # Was 0.1
+
+WHY: Creatures need VISIBLE, EXTENDED limbs to generate locomotion:
+     - Longer limbs (scale 2) can reach the ground and push
+     - Thinner limbs (scale 0.4) don't overlap/hide inside each other
+     - More recurrence (scale 4) creates more limbs for locomotion
+     - Larger joint offsets (0.5x) ensure limbs extend outward from body
+
+     Without these changes, creatures were evolving as single blobs with
+     all limbs hidden inside - unable to move no matter how good the
+     fitness function or motor settings.
