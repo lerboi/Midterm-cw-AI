@@ -40,7 +40,7 @@ class Simulation:
 
         # Spawn creature at base of mountain - calculate correct surface height
         # Mountain uses Gaussian: height = 5 * exp(-(x² + y²) / 18) - 1
-        spawn_x = 3.0  # Spawn closer to mountain for better climbing opportunity
+        spawn_x = 1.5  # Spawn on steeper part of mountain for better climbing gradient
         spawn_y = 0.0
         # Calculate surface height at spawn position
         surface_z = 5.0 * math.exp(-(spawn_x**2 + spawn_y**2) / 18.0) - 1.0

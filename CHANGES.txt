@@ -612,3 +612,84 @@ WHY THESE CHANGES:
    - Evolve more stable body plans
    - Develop actual climbing behavior
    - Converge faster on functional solutions
+
+================================================================================
+20. SPAWN POSITION - MOVED CLOSER TO PEAK (simulation.py)
+================================================================================
+
+PROBLEM: Creatures were spawning at x=3.0, where the mountain slope is gentle.
+         The Gaussian formula shows:
+         - At x=3: height ≈ 0.6 (gentle slope, little climbing gradient)
+         - At x=1.5: height ≈ 2.8 (steep slope, strong climbing gradient)
+
+         Creatures had to traverse flat terrain before reaching meaningful slopes,
+         making the climbing task unnecessarily difficult.
+
+CHANGES:
+| Parameter  | Old Value | New Value | Reason                              |
+|------------|-----------|-----------|-------------------------------------|
+| spawn_x    | 3.0       | 1.5       | Spawn on steeper part of mountain   |
+
+CODE (simulation.py, run_creature):
+    spawn_x = 1.5  # Was 3.0
+
+WHY: Spawning on the steeper part of the mountain provides:
+     - Clearer fitness gradient (small movements = noticeable height gain)
+     - Less wasted time traversing flat terrain
+     - Better signal for evolution to optimize toward climbing
+
+================================================================================
+21. POPULATION SIZE - INCREASED FOR BETTER EXPLORATION (test_ga_mountain.py)
+================================================================================
+
+PROBLEM: Population of 15 was too small to explore the complex search space.
+         With 4 genes × 17 parameters per gene, the search space is enormous.
+         Small populations lead to:
+         - Premature convergence to local optima
+         - Limited genetic diversity
+         - Rare chance of finding working body plans
+
+CHANGES:
+| Parameter  | Old Value | New Value | Reason                              |
+|------------|-----------|-----------|-------------------------------------|
+| pop_size   | 15        | 30        | Double the population diversity     |
+
+CODE (test_ga_mountain.py):
+    pop = population.Population(pop_size=30, gene_count=4)  # Was 15
+
+WHY: Larger population provides:
+     - More genetic diversity per generation
+     - Better exploration of the search space
+     - Higher probability of discovering functional body plans
+     - More robust evolution against premature convergence
+
+================================================================================
+22. JOINT ATTACHMENT - PREVENT LIMB OVERLAP (genome.py)
+================================================================================
+
+PROBLEM: Child limbs were clipping through parent bodies. The Z-offset
+         calculation only considered parent length:
+
+         OLD: xyz_3 = parent_len * 0.5 + xyz_3_gene * 0.3
+
+         This placed the joint at the parent's endpoint, but the child cylinder
+         extends in BOTH directions from the joint. Half the child would be
+         inside the parent body, causing physics issues and visual overlap.
+
+CHANGES:
+| Parameter  | Old Formula                           | New Formula                                    |
+|------------|---------------------------------------|------------------------------------------------|
+| xyz_3      | parent_len/2 + gene*0.3               | parent_len/2 + child_len/2 + gene*0.2          |
+
+CODE (genome.py, to_joint_element):
+    parent_len = max(self.parent_link_length, 0.1)
+    child_len = max(self.link_length, 0.1)  # NEW: Account for child length
+    xyz_3 = (parent_len / 2) + (child_len / 2) + self.joint_origin_xyz_3 * 0.2
+
+WHY: The new formula ensures:
+     - Child limb starts exactly at parent's endpoint (parent_len/2)
+     - Child limb extends outward, not into parent (child_len/2)
+     - Small random offset for variation (gene * 0.2)
+     - No physical overlap between parent and child bodies
+     - More stable physics simulation
+     - Cleaner, more functional creature morphologies

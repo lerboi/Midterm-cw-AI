@@ -356,15 +356,18 @@ class URDFLink:
         orig_tag.setAttribute("rpy", rpy)
         # Position joint at end of parent link to prevent floating/detached limbs
         # URDF cylinders extend along Z-axis, so offset must be in Z (xyz_3)
-        # Use parent's link_length (not child's) to position at parent's endpoint
-        # Enforce minimum parent length for joint calculation
+        # Use BOTH parent and child link lengths to prevent overlap
+        # Enforce minimum lengths for joint calculation
         parent_len = max(self.parent_link_length, 0.1)
+        child_len = max(self.link_length, 0.1)
         # Spread sibling limbs around parent using sibling_ind for spatial variation
         # This prevents all recurrent limbs from spawning at the exact same point
         spread_factor = (self.sibling_ind - 1) * 0.2  # Spread siblings apart
         xyz_1 = self.joint_origin_xyz_1 * 0.5 + spread_factor  # X varies per sibling
         xyz_2 = self.joint_origin_xyz_2 * 0.5 - spread_factor  # Y varies opposite
-        xyz_3 = parent_len * 0.5 + self.joint_origin_xyz_3 * 0.3  # Z at parent endpoint
+        # Z offset: parent half-length + child half-length + small random offset
+        # This ensures child limb starts at parent's end without clipping through
+        xyz_3 = (parent_len / 2) + (child_len / 2) + self.joint_origin_xyz_3 * 0.2
         xyz = str(xyz_1) + " " + str(xyz_2) + " " + str(xyz_3)
         orig_tag.setAttribute("xyz", xyz)
 
