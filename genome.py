@@ -23,7 +23,7 @@ class Genome():
 
         Body plan:
         - Gene 0: Body (horizontal cylinder as base)
-        - Gene 1: Legs (4 legs via recurrence, angled outward)
+        - Gene 1: Legs (4 legs via recurrence, angled DOWNWARD to touch ground)
 
         Only control genes (indices 14-16) are randomized.
         Morphology genes (indices 0-13) are fixed for a functional walker.
@@ -33,8 +33,8 @@ class Genome():
         # Gene 0: Body (root link)
         body_gene = np.zeros(gene_length)
         body_gene[0] = 0.5   # link-shape: cylinder
-        body_gene[1] = 0.25  # link-length: 0.25 * 2 = 0.5 (short, wide body)
-        body_gene[2] = 0.6   # link-radius: 0.6 * 0.4 = 0.24 (wider body)
+        body_gene[1] = 0.2   # link-length: 0.2 * 2 = 0.4 (compact body)
+        body_gene[2] = 0.5   # link-radius: 0.5 * 0.4 = 0.2 (wide body for stability)
         body_gene[3] = 0.0   # link-recurrence: 0 (no copies of body)
         body_gene[4] = 0.5   # link-mass: moderate
         body_gene[5] = 0.5   # joint-type: doesn't matter for root
@@ -52,22 +52,25 @@ class Genome():
         body_gene[16] = np.random.random()  # control-freq
         genome.append(body_gene)
 
-        # Gene 1: Legs (attached to body)
+        # Gene 1: Legs (attached to body, pointing DOWNWARD)
         leg_gene = np.zeros(gene_length)
         leg_gene[0] = 0.5    # link-shape: cylinder
-        leg_gene[1] = 0.35   # link-length: 0.35 * 2 = 0.7 (longer legs to reach ground)
-        leg_gene[2] = 0.2    # link-radius: 0.2 * 0.4 = 0.08 (thin legs)
-        leg_gene[3] = 1.0    # link-recurrence: 1.0 * 2 = 2, int(2)+1 = 3 legs
-        leg_gene[4] = 0.3    # link-mass: lighter legs
+        leg_gene[1] = 0.4    # link-length: 0.4 * 2 = 0.8 (long legs to reach ground)
+        leg_gene[2] = 0.15   # link-radius: 0.15 * 0.4 = 0.06 (thin legs)
+        leg_gene[3] = 1.5    # link-recurrence: 1.5 * 2 = 3, int(3)+1 = 4 legs
+        leg_gene[4] = 0.2    # link-mass: light legs
         leg_gene[5] = 0.5    # joint-type: revolute
         leg_gene[6] = 0.0    # joint-parent: attached to body (gene 0)
-        leg_gene[7] = 0.5    # joint-axis-xyz: Y-axis rotation (for walking motion)
-        leg_gene[8] = 0.25   # joint-origin-rpy-1: π/2 base rotation (spread by sibling_ind)
-        leg_gene[9] = 0.25   # joint-origin-rpy-2: angle legs outward
-        leg_gene[10] = 0.0   # joint-origin-rpy-3
-        leg_gene[11] = 0.5   # joint-origin-xyz-1: offset from body center
-        leg_gene[12] = 0.5   # joint-origin-xyz-2: offset from body center
-        leg_gene[13] = 0.0   # joint-origin-xyz-3: at body's edge
+        leg_gene[7] = 0.2    # joint-axis-xyz: X-axis rotation (legs swing forward/back)
+        # KEY FIX: Angle legs DOWNWARD toward ground
+        # rpy-1 is multiplied by sibling_ind, spreading legs around body
+        leg_gene[8] = 0.125  # joint-origin-rpy-1: π/4 base (spreads to π/2, 3π/4, π per leg)
+        leg_gene[9] = 0.375  # joint-origin-rpy-2: 0.375 * 2π = 3π/4 ≈ 135° - angles legs DOWN
+        leg_gene[10] = 0.0   # joint-origin-rpy-3: no roll
+        # Position legs at sides of body
+        leg_gene[11] = 0.8   # joint-origin-xyz-1: X offset (spread outward)
+        leg_gene[12] = 0.8   # joint-origin-xyz-2: Y offset (spread outward)
+        leg_gene[13] = 0.0   # joint-origin-xyz-3: at body center height
         # Control genes - randomized for evolution
         leg_gene[14] = np.random.random()  # control-waveform
         leg_gene[15] = np.random.random()  # control-amp
