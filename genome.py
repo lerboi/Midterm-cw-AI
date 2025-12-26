@@ -181,14 +181,30 @@ class Genome():
         return links
 
     @staticmethod
-    def crossover(g1, g2):
+    def crossover(g1, g2, min_genes=2):
+        """
+        Crossover two genomes to create offspring.
+
+        Args:
+            g1: First parent genome
+            g2: Second parent genome
+            min_genes: Minimum genes in offspring (default 2 for body+legs)
+        """
         x1 = random.randint(0, len(g1)-1)
         x2 = random.randint(0, len(g2)-1)
         # Combine genes from both parents as a list (not numpy array)
         # Each gene is a numpy array, genome is a list of genes
         g3 = list(g1[x1:]) + list(g2[x2:])
-        if len(g3) > len(g1):
-            g3 = g3[0:len(g1)]
+
+        # Ensure minimum gene count (need body + legs)
+        max_len = max(len(g1), len(g2), min_genes)
+        if len(g3) > max_len:
+            g3 = g3[0:max_len]
+
+        # If somehow too short, pad with genes from g1
+        while len(g3) < min_genes and len(g1) >= min_genes:
+            g3.append(g1[len(g3) % len(g1)].copy())
+
         return g3
 
     @staticmethod
@@ -261,9 +277,17 @@ class Genome():
         return g3
 
     @staticmethod
-    def shrink_mutate(genome, rate):
-        if len(genome) == 1:
-            # Deep copy to prevent corruption of parent DNA
+    def shrink_mutate(genome, rate, min_genes=2):
+        """
+        Randomly remove a gene from the genome.
+
+        Args:
+            genome: List of genes
+            rate: Probability of shrinking
+            min_genes: Minimum number of genes to maintain (default 2 for body+legs)
+        """
+        if len(genome) <= min_genes:
+            # Don't shrink below minimum - need at least body + legs
             return [gene.copy() for gene in genome]
         if random.random() < rate:
             ind = random.randint(0, len(genome)-1)
