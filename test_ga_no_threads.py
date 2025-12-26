@@ -14,7 +14,7 @@ import numpy as np
 class TestGA(unittest.TestCase):
     def testBasicGA(self):
         pop = population.Population(pop_size=10,
-                                    gene_count=6)
+                                    gene_count=4)
         #sim = simulation.ThreadedSim(pool_size=1)
         sim = simulation.Simulation()
 

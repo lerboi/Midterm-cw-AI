@@ -147,7 +147,7 @@ class Simulation:
             p.setJointMotorControl2(cid, jid,
                     controlMode=p.VELOCITY_CONTROL,
                     targetVelocity=m.get_output(),
-                    force=12,
+                    force=20,  # Increased from 12 for more powerful movement
                     physicsClientId=self.physicsClientId)
         
 

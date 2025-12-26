@@ -550,3 +550,65 @@ WHY: Siblings now attach at different positions around the parent:
      Combined with rotation spreading (RPY * sibling_ind), this creates
      limbs that extend outward in different directions rather than all
      clustering at the same point.
+
+================================================================================
+19. MAJOR SIMPLIFICATION - OPTIMIZED FOR CLIMBING (Multiple Files)
+================================================================================
+
+PROBLEM: Creatures were evolving as complex blobs with too many overlapping
+         parts. The complexity was hindering evolution rather than helping.
+         Based on PDF guidance, simplified the system to focus on functional
+         locomotion.
+
+CHANGES OVERVIEW:
+| # | Change                        | File(s)              | Old → New           |
+|---|-------------------------------|----------------------|---------------------|
+| 1 | Reduce link-recurrence        | genome.py            | 4 → 2               |
+| 2 | Reduce gene_count             | test_ga*.py          | 6 → 4               |
+| 3 | Use cylinders only            | genome.py            | 3 shapes → cylinder |
+| 4 | Increase motor force          | simulation.py        | 12 → 20             |
+| 5 | Simplify fitness              | creature.py          | Complex → Height    |
+
+DETAILED CHANGES:
+
+1. LINK RECURRENCE (genome.py):
+   "link-recurrence": {"scale":2}  # Was 4
+   - Now creates 1-3 limbs per gene instead of 1-5
+   - Fewer overlapping parts, cleaner structures
+
+2. GENE COUNT (test_ga_mountain.py, test_ga.py, test_ga_no_threads.py):
+   gene_count=4  # Was 6
+   - Simpler creatures with 4 body segments max
+   - Faster evolution, less complexity
+
+3. CYLINDERS ONLY (genome.py, to_link_element):
+   - Removed sphere and box shapes
+   - All body parts are now cylinders
+   - Cylinders work better for leg-like locomotion
+   - Simplified inertia calculation
+
+4. MOTOR FORCE (simulation.py, update_motors):
+   force=20  # Was 12
+   - More powerful motors to move creature effectively
+   - Enables stronger pushing/climbing movements
+
+5. SIMPLIFIED FITNESS (creature.py, get_climbing_fitness):
+   OLD: fitness = (progress * 2.5) + final_height + movement_bonus - surface_penalty
+   NEW: fitness = (final_height * 3.0) + movement_bonus
+
+   - Primary focus: HEIGHT (as PDF says "get as high as possible")
+   - Secondary: Small movement bonus (cap 1.0)
+   - Removed complex progress/surface calculations
+   - Clear evolutionary pressure toward climbing
+
+WHY THESE CHANGES:
+   The PDF explicitly says "get as high as possible up the mountain".
+   Complex creatures with many overlapping parts were:
+   - Physically unstable (causing physics explosions)
+   - Not developing functional locomotion
+   - Gaming the fitness function without actually climbing
+
+   Simpler creatures with clear height-based fitness should:
+   - Evolve more stable body plans
+   - Develop actual climbing behavior
+   - Converge faster on functional solutions
