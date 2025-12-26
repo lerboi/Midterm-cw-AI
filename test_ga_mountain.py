@@ -8,27 +8,25 @@ import numpy as np
 class TestGA(unittest.TestCase):
     def testBasicGA(self):
         """
-        FIXED WALKER GENETIC ALGORITHM
+        SEEDED EVOLUTION GENETIC ALGORITHM
 
-        This implements the PDF-suggested approach:
-        "start with a fixed design robot, and just evolve the motor control parameters"
+        This approach:
+        1. SEEDS the initial population with a reasonable walker design
+           (not random blobs that can't move)
+        2. ALLOWS FULL EVOLUTION of both morphology AND motor control
+        3. Creatures can evolve to find the optimal shape for climbing
 
-        Key changes from random creature evolution:
-        1. All creatures start with identical fixed walker body
-        2. Only motor control genes (waveform, amplitude, frequency) are evolved
-        3. No shrink/grow mutations (body structure is preserved)
-        4. Movement-first fitness rewards ANY displacement
-
-        This dramatically reduces the search space and creates a fitness gradient
-        that evolution can follow.
+        The fixed walker is just a STARTING POINT, not a constraint.
+        Shape WILL change over generations as evolution finds better designs.
         """
         pop_size = 30
 
-        # Create initial population with FIXED WALKER bodies
-        # All creatures have identical body structure, only motor control differs
+        # Create initial population SEEDED with walker design
+        # This gives evolution a reasonable starting point
         creatures = []
         spec = genome.Genome.get_gene_spec()
         for i in range(pop_size):
+            # Start with fixed walker body as SEED
             cr = creature.Creature(gene_count=2, use_fixed_walker=True)
             creatures.append(cr)
 
@@ -47,7 +45,8 @@ class TestGA(unittest.TestCase):
                   f"mean: {np.round(np.mean(fits), 3)} "
                   f"links: {np.round(np.mean(links))}")
 
-            # Selection and reproduction with CONTROL-ONLY operators
+            # Selection and reproduction with FULL EVOLUTION
+            # Shape CAN and WILL change over generations
             fit_map = population.Population.get_fitness_map(fits)
             new_creatures = []
 
@@ -57,32 +56,33 @@ class TestGA(unittest.TestCase):
                 p1 = creatures[p1_ind]
                 p2 = creatures[p2_ind]
 
-                # CONTROL-ONLY crossover - preserves body structure
-                dna = genome.Genome.crossover_control_only(p1.dna, p2.dna)
+                # FULL crossover - allows body structure to mix
+                dna = genome.Genome.crossover(p1.dna, p2.dna)
 
-                # CONTROL-ONLY mutation - only mutates motor genes
-                # Higher mutation rate since search space is smaller
-                dna = genome.Genome.point_mutate_control_only(dna, rate=0.4, amount=0.3)
+                # FULL mutation - allows body shape to evolve
+                dna = genome.Genome.point_mutate(dna, rate=0.25, amount=0.4)
 
-                # NO shrink/grow mutations - body structure is fixed
+                # Structural mutations - allows complexity to change
+                dna = genome.Genome.shrink_mutate(dna, rate=0.05)
+                dna = genome.Genome.grow_mutate(dna, rate=0.1)
 
-                # Create new creature with mutated DNA
-                cr = creature.Creature(gene_count=2, use_fixed_walker=True)
+                # Create new creature with evolved DNA
+                cr = creature.Creature(gene_count=2)
                 cr.update_dna(dna)
                 new_creatures.append(cr)
 
-            # Elitism: keep the best creature
+            # Elitism: keep the best creature unchanged
             max_fit = np.max(fits)
             for cr in creatures:
                 if cr.get_climbing_fitness() == max_fit:
-                    elite_cr = creature.Creature(gene_count=2, use_fixed_walker=True)
+                    elite_cr = creature.Creature(gene_count=2)
                     elite_cr.update_dna(cr.dna)
                     new_creatures[0] = elite_cr
 
                     # Save elite creature
                     import os
                     os.makedirs("elite_creatures", exist_ok=True)
-                    filename = f"elite_creatures/elite_walker_{iteration}.csv"
+                    filename = f"elite_creatures/elite_gen_{iteration}.csv"
                     genome.Genome.to_csv(cr.dna, filename)
                     break
 
