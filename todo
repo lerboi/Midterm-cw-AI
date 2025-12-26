@@ -1,0 +1,28 @@
+1-
+I have attatched 2 codebases from Github (Midterm-cw-AI and Midterm-CW-AI-Starter). I also attatched the PDF CM3020_AI_Coursework.pdf. Firstly, examine the PDF file (Only Part B) and read and understand what the main task is. You must understand every aspect of what is required. The end goal is to perform every task outlined in Part B of the PDF (Code, Report, and Video). The github repo Midterm-CW-AI-Starter is the starter code mentioned in Part B of the Pdf ("Download the code for the new environment, linked below." is referring to this). The repo Midterm-cw-AI is my current work. 
+
+Look through everything, and understand the whole context of everything. Dont write any code or make any changes, your task is to just understand the 3 aspects (Midterm-cw-AI, Midterm-CW-AI-Starter, and the CM3020_AI_Coursework.pdf), the task that the PDF outlined in Part B, and the whole entire context. Once you have a full understanding, let me know.
+
+
+
+2-
+Look through all of my current work and tell me if i am on the right track, or if im doing things wrongly. My current work has a list of problems which i am unable to fix, and below i will list some of the issues.
+
+- The Creature, even after thousands of simulations, never actually manages to climb the mountain. I suspect the fitness is incorrectly measured. According to the PDF, the point of the simulations is to create a creature that can best scale the mountain after all the simulations and tests.
+- The Creature has a myriad of issues, such as the limbs being inside one another, the creature being just 2 spheres that wiggle most of the time, etc. Even after thousands of simulations (test_ga_mountain.py), the creature never improves. 
+- Currently the creatures fitness increases when it moves, but its flawed as even if the creature moves AWAY from the mountain peak/mountain, the fitness increases. Fitness should only increase as the creature climbs closer to the mountain peak, and only the BASE of the creature should be calculated to discourage the creature from just growing in height.
+
+Overall, my code has accomplished none of the main tasks outlined in the PDF. Below are 3 of the main focuses in the PDF.
+
+"
+• Change the fitness function so that fitness is based on ability to climb the mountain. It is up to you how to do this
+• Carry out a series of experiments where you test different GA and genome settings, e.g. different population size and other high-level settings
+• Produce graphs and tables describing how the different settings you tried affect the mountain climbing
+"
+
+Do you suggest i start from scratch, or I tweak my current approach? Do not write any code or make any changes, your task is to just give me the recommended next steps to take with the full context of everything i gave you.
+
+
+
+3-
+Based on your recommendation, give me an in depth Implementation Plan in a txt file for the next steps to take from start to finish to eventually complete all the required tasks outlined in Part B of the PDF (Codebase, Report, and Video). That Implementation Plan txt file will be what we will refer to from start to finish to eventually finish all the required tasks, and should also contain the main goal of what every phase is suppoed to accomplish, so that we dont lose sight of the main goal during the process. Do not make any code changes or write any code, just produce the in depth Implementation Plan txt file.
