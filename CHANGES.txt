@@ -512,3 +512,41 @@ WHY: Evolution naturally produces some invalid/unstable creature designs.
      Rather than crashing, we let these creatures get 0 fitness and be
      selected against. This is actually beneficial - the GA will learn
      to avoid unstable configurations over generations.
+
+================================================================================
+18. SIBLING LIMB SPREADING - PREVENT OVERLAPPING LIMBS (genome.py)
+================================================================================
+
+PROBLEM: With link-recurrence=4, up to 5 copies of each limb can be created.
+         All these siblings were attaching at the EXACT SAME XYZ position:
+
+         Before:
+           xyz_1 = self.joint_origin_xyz_1 * 0.5  # Same for ALL siblings
+           xyz_2 = self.joint_origin_xyz_2 * 0.5  # Same for ALL siblings
+
+         Only rotation (RPY) varied by sibling_ind, causing all limbs to
+         originate from the same point and overlap heavily - creating a
+         blob instead of spread-out functional limbs.
+
+CHANGES:
+| Parameter      | Old Behavior              | New Behavior                    |
+|----------------|---------------------------|--------------------------------|
+| xyz_1 (X pos)  | Fixed per gene            | Varies by sibling_ind (+0.2)   |
+| xyz_2 (Y pos)  | Fixed per gene            | Varies by sibling_ind (-0.2)   |
+| xyz_3 (Z pos)  | 0.5x offset               | 0.3x offset (reduce overlap)   |
+
+CODE (genome.py, to_joint_element):
+    spread_factor = (self.sibling_ind - 1) * 0.2
+    xyz_1 = self.joint_origin_xyz_1 * 0.5 + spread_factor
+    xyz_2 = self.joint_origin_xyz_2 * 0.5 - spread_factor
+    xyz_3 = parent_len * 0.5 + self.joint_origin_xyz_3 * 0.3
+
+WHY: Siblings now attach at different positions around the parent:
+     - Sibling 1: offset (0, 0)
+     - Sibling 2: offset (+0.2, -0.2)
+     - Sibling 3: offset (+0.4, -0.4)
+     - etc.
+
+     Combined with rotation spreading (RPY * sibling_ind), this creates
+     limbs that extend outward in different directions rather than all
+     clustering at the same point.

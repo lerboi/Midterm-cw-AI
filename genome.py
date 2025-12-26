@@ -405,9 +405,12 @@ class URDFLink:
         # Use parent's link_length (not child's) to position at parent's endpoint
         # Enforce minimum parent length for joint calculation
         parent_len = max(self.parent_link_length, 0.1)
-        xyz_1 = self.joint_origin_xyz_1 * 0.5  # Increased X offset for limb extension
-        xyz_2 = self.joint_origin_xyz_2 * 0.5  # Increased Y offset for limb extension
-        xyz_3 = parent_len * 0.5 + self.joint_origin_xyz_3 * 0.5  # Z = parent endpoint + offset
+        # Spread sibling limbs around parent using sibling_ind for spatial variation
+        # This prevents all recurrent limbs from spawning at the exact same point
+        spread_factor = (self.sibling_ind - 1) * 0.2  # Spread siblings apart
+        xyz_1 = self.joint_origin_xyz_1 * 0.5 + spread_factor  # X varies per sibling
+        xyz_2 = self.joint_origin_xyz_2 * 0.5 - spread_factor  # Y varies opposite
+        xyz_3 = parent_len * 0.5 + self.joint_origin_xyz_3 * 0.3  # Z at parent endpoint
         xyz = str(xyz_1) + " " + str(xyz_2) + " " + str(xyz_3)
         orig_tag.setAttribute("xyz", xyz)
 
