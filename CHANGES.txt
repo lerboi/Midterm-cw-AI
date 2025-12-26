@@ -693,3 +693,34 @@ WHY: The new formula ensures:
      - No physical overlap between parent and child bodies
      - More stable physics simulation
      - Cleaner, more functional creature morphologies
+
+================================================================================
+23. JOINT POSITIONING FIX - PREVENT FLOATING LIMBS (genome.py)
+================================================================================
+
+PROBLEM: The previous fix (change 22) added child_len/2 to the joint offset,
+         which created gaps between parent and child limbs. With link-length
+         scale of 2, child_len could be up to 2.0, so child_len/2 = 1.0.
+         This placed joints very far from parents, making limbs appear detached.
+
+         OLD: xyz_3 = parent_len/2 + child_len/2 + gene*0.2  (up to 2.2 offset!)
+
+CHANGES:
+| Parameter      | Old Value                  | New Value                     |
+|----------------|----------------------------|-------------------------------|
+| xyz_3          | parent/2 + child/2 + 0.2   | parent/2 + 0.05 + gene*0.1    |
+| xyz_1/xyz_2    | gene * 0.5                 | gene * 0.3                    |
+| spread_factor  | (sibling-1) * 0.2          | (sibling-1) * 0.1             |
+
+CODE (genome.py, to_joint_element):
+    spread_factor = (self.sibling_ind - 1) * 0.1  # Was 0.2
+    xyz_1 = self.joint_origin_xyz_1 * 0.3 + spread_factor  # Was 0.5
+    xyz_2 = self.joint_origin_xyz_2 * 0.3 - spread_factor  # Was 0.5
+    xyz_3 = (parent_len / 2) + 0.05 + self.joint_origin_xyz_3 * 0.1
+
+WHY: The new formula:
+     - Places joint at parent's tip (parent_len/2) with tiny 0.05 offset
+     - Child is centered on joint (some visual overlap is fine - connected)
+     - Reduced X/Y spread keeps siblings visually connected
+     - Maximum Z offset is now ~0.15 instead of ~2.2
+     - Limbs stay visually attached to their parents
